@@ -21,7 +21,7 @@ public class TelegramWebhookFunction
 
     [Function("TelegramWebhook")]
     public async Task<HttpResponseData> Run(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "webhook/telegram")]
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "telegram/webhook")]
         HttpRequestData req)
     {
         try
