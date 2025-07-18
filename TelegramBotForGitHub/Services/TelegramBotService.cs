@@ -4,6 +4,7 @@ using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
+using TelegramBotForGitHub.Commands.Core;
 using TelegramBotForGitHub.Configuration;
 using TelegramBotForGitHub.Services.Interfaces;
 
@@ -14,17 +15,20 @@ public class TelegramBotService : ITelegramBotService
     private readonly ITelegramBotClient _botClient;
     private readonly IUserSessionService _userSessionService;
     private readonly IGitHubService _gitHubService;
+    private readonly CommandHandler _commandHandler;
     private readonly ILogger<TelegramBotService> _logger;
 
     public TelegramBotService(
         IOptions<BotConfiguration> config,
         IUserSessionService userSessionService,
         IGitHubService gitHubService,
+        CommandHandler commandHandler,
         ILogger<TelegramBotService> logger)
     {
         _botClient = new TelegramBotClient(config.Value.TelegramBotToken);
         _userSessionService = userSessionService;
         _gitHubService = gitHubService;
+        _commandHandler = commandHandler;
         _logger = logger;
     }
 
@@ -61,7 +65,14 @@ public class TelegramBotService : ITelegramBotService
             session = await _userSessionService.CreateUserSessionAsync(chatId);
         }
 
-        await ShowMainMenu(chatId);
+        if (messageText.StartsWith('/'))
+        {
+            await _commandHandler.Execute(message);
+        }
+        else
+        {
+            await ShowMainMenu(chatId);
+        }
     }
 
     private async Task HandleCallbackQueryAsync(CallbackQuery callbackQuery)
@@ -106,6 +117,9 @@ public class TelegramBotService : ITelegramBotService
             case "refresh_data":
                 await ShowMainMenu(chatId, "🔄 Data refreshed");
                 break;
+            case "help":
+                await ShowHelp(chatId);
+                break;
             default:
                 if (data.StartsWith("repo_"))
                     await HandleRepositoryAction(chatId, data);
@@ -116,6 +130,29 @@ public class TelegramBotService : ITelegramBotService
 
         await _botClient.AnswerCallbackQuery(callbackQuery.Id);
     }
+    
+    private async Task ShowHelp(long chatId)
+    {
+        var helpMessage = $"📖 <b>GitHub Bot Help</b>\n\n" +
+                          $"<b>📋 Available Commands:</b>\n" +
+                          $"/start - Show welcome message\n" +
+                          $"/auth - Authorize with GitHub\n" +
+                          $"/profile - View GitHub profile\n" +
+                          $"/repositories - View your repositories\n" +
+                          $"/issues - Manage issues\n" +
+                          $"/help - Show this help message";
+
+        await _botClient.SendMessage(
+            chatId,
+            helpMessage,
+            parseMode: ParseMode.Html,
+            replyMarkup: new InlineKeyboardMarkup(
+                InlineKeyboardButton.WithCallbackData("⬅️ Back", "back_to_main")
+            )
+        );
+    }
+            
+
 
     private async Task ShowMainMenu(long chatId, string? additionalMessage = null)
     {
