@@ -2,6 +2,7 @@ using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using TelegramBotForGitHub.Commands.Core;
 using TelegramBotForGitHub.Configuration;
 using TelegramBotForGitHub.Services;
 using TelegramBotForGitHub.Services.Interfaces;
@@ -40,6 +41,9 @@ var host = new HostBuilder()
             };
             return new CosmosClient(config.CosmosDB.ConnectionString, cosmosClientOptions);
         });
+        
+        services.AddSingleton<ICommandFactory, CommandFactory>();
+        services.AddScoped<CommandHandler>();
 
         // Services
         services.AddScoped<IUserSessionService, UserSessionService>();
