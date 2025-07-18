@@ -55,35 +55,13 @@ public class TelegramBotService : ITelegramBotService
         if (string.IsNullOrEmpty(messageText))
             return;
 
-        var isAuthorized = await _userSessionService.IsUserAuthorizedAsync(chatId);
-
-        switch (messageText.ToLower())
+        var session = await _userSessionService.GetUserSessionAsync(chatId);
+        if (session == null)
         {
-            case "/start":
-                await HandleStartCommand(chatId);
-                break;
-            case "/login":
-                await HandleLoginCommand(chatId);
-                break;
-            case "/logout":
-                await HandleLogoutCommand(chatId);
-                break;
-            case "/repos":
-                if (isAuthorized)
-                    await HandleReposCommand(chatId);
-                else
-                    await SendMessageAsync(chatId, "❌ Please login first with /login");
-                break;
-            case "/profile":
-                if (isAuthorized)
-                    await HandleProfileCommand(chatId);
-                else
-                    await SendMessageAsync(chatId, "❌ Please login first with /login");
-                break;
-            default:
-                await HandleDefaultMessage(chatId, isAuthorized);
-                break;
+            session = await _userSessionService.CreateUserSessionAsync(chatId);
         }
+
+        await ShowMainMenu(chatId);
     }
 
     private async Task HandleCallbackQueryAsync(CallbackQuery callbackQuery)
@@ -91,54 +69,158 @@ public class TelegramBotService : ITelegramBotService
         var chatId = callbackQuery.Message?.Chat.Id ?? 0;
         var data = callbackQuery.Data;
 
-        if (string.IsNullOrEmpty(data))
+        if (string.IsNullOrEmpty(data) || chatId == 0)
             return;
+
+        var isAuthorized = await _userSessionService.IsUserAuthorizedAsync(chatId);
+
+        switch (data)
+        {
+            case "auth_github":
+                await HandleGitHubAuth(chatId, isAuthorized);
+                break;
+            case "logout_github":
+                await HandleLogout(chatId);
+                break;
+            case "show_profile":
+                if (isAuthorized)
+                    await ShowProfile(chatId);
+                else
+                    await ShowNotAuthorizedMessage(chatId);
+                break;
+            case "show_repositories":
+                if (isAuthorized)
+                    await ShowRepositories(chatId);
+                else
+                    await ShowNotAuthorizedMessage(chatId);
+                break;
+            case "show_issues":
+                if (isAuthorized)
+                    await ShowIssuesMenu(chatId);
+                else
+                    await ShowNotAuthorizedMessage(chatId);
+                break;
+            case "back_to_main":
+                await ShowMainMenu(chatId);
+                break;
+            case "refresh_data":
+                await ShowMainMenu(chatId, "🔄 Data refreshed");
+                break;
+            default:
+                if (data.StartsWith("repo_"))
+                    await HandleRepositoryAction(chatId, data);
+                else if (data.StartsWith("issue_"))
+                    await HandleIssueAction(chatId, data);
+                break;
+        }
 
         await _botClient.AnswerCallbackQuery(callbackQuery.Id);
     }
 
-    private async Task HandleStartCommand(long chatId)
-    {
-        var session = await _userSessionService.GetUserSessionAsync(chatId);
-        if (session == null)
-        {
-            await _userSessionService.CreateUserSessionAsync(chatId);
-        }
-
-        var welcomeMessage = "🤖 Welcome to the Telegram bot for GitHub!\n\n" +
-                             "Available commands:\n" +
-                             "/login - Authenticate with GitHub\n" +
-                             "/logout - Logout from GitHub\n" +
-                             "/profile - View your GitHub profile\n" +
-                             "/repos - List your repositories\n\n" +
-                             "To get started, please authenticate with /login";
-
-        await SendMessageAsync(chatId, welcomeMessage);
-    }
-
-    private async Task HandleLoginCommand(long chatId)
+    private async Task ShowMainMenu(long chatId, string? additionalMessage = null)
     {
         var isAuthorized = await _userSessionService.IsUserAuthorizedAsync(chatId);
+        var message = "🤖 <b>GitHub Bot</b>\n\n";
+
+        if (additionalMessage != null)
+        {
+            message += $"{additionalMessage}\n\n";
+        }
+
         if (isAuthorized)
         {
-            await SendMessageAsync(chatId, "✅ You are already authenticated with GitHub!");
+            var session = await _userSessionService.GetUserSessionAsync(chatId);
+            message += $"✅ You are authorized as: <b>{session?.GitHubUsername ?? "GitHub User"}</b>\n\n";
+            message += "Select an action:";
+        }
+        else
+        {
+            message += "❌ You are not authorized with GitHub\n\n";
+            message += "Please authorize to work with GitHub:";
+        }
+
+        var keyboard = CreateMainMenuKeyboard(isAuthorized);
+
+        await _botClient.SendMessage(
+            chatId,
+            message,
+            parseMode: ParseMode.Html,
+            replyMarkup: keyboard
+        );
+    }
+
+    private InlineKeyboardMarkup CreateMainMenuKeyboard(bool isAuthorized)
+    {
+        var buttons = new List<List<InlineKeyboardButton>>();
+
+        if (!isAuthorized)
+        {
+            buttons.Add(new List<InlineKeyboardButton>
+            {
+                InlineKeyboardButton.WithCallbackData("🔐 Authorize", "auth_github")
+            });
+        }
+        else
+        {
+            buttons.Add(new List<InlineKeyboardButton>
+            {
+                InlineKeyboardButton.WithCallbackData("👤 Profile", "show_profile"),
+                InlineKeyboardButton.WithCallbackData("📚 Repositories", "show_repositories")
+            });
+
+            buttons.Add(new List<InlineKeyboardButton>
+            {
+                InlineKeyboardButton.WithCallbackData("🐛 Issues", "show_issues"),
+                InlineKeyboardButton.WithCallbackData("🔄 Refresh", "refresh_data")
+            });
+
+            buttons.Add(new List<InlineKeyboardButton>
+            {
+                InlineKeyboardButton.WithCallbackData("🚪 Logout", "logout_github")
+            });
+        }
+
+        return new InlineKeyboardMarkup(buttons);
+    }
+
+    private async Task HandleGitHubAuth(long chatId, bool isAuthorized)
+    {
+        if (isAuthorized)
+        {
+            await _botClient.SendMessage(
+                chatId,
+                "✅ You are already authorized with GitHub!",
+                replyMarkup: new InlineKeyboardMarkup(
+                    InlineKeyboardButton.WithCallbackData("⬅️ Back", "back_to_main")
+                )
+            );
             return;
         }
 
         var authUrl = _gitHubService.GetAuthorizationUrl(chatId);
         var keyboard = new InlineKeyboardMarkup(new[]
         {
-            InlineKeyboardButton.WithUrl("🔗 Authenticate with GitHub", authUrl)
+            new[]
+            {
+                InlineKeyboardButton.WithUrl("🔗 Go to authorization", authUrl)
+            },
+            new[]
+            {
+                InlineKeyboardButton.WithCallbackData("⬅️ Back", "back_to_main")
+            }
         });
 
         await _botClient.SendMessage(
             chatId,
-            "🔐 Click the button below to authenticate with GitHub:",
+            "🔐 <b>GitHub Authorization</b>\n\n" +
+            "Click the button below to authorize.\n" +
+            "After authorization, return to the bot and press 'Refresh'.",
+            parseMode: ParseMode.Html,
             replyMarkup: keyboard
         );
     }
 
-    private async Task HandleLogoutCommand(long chatId)
+    private async Task HandleLogout(long chatId)
     {
         var session = await _userSessionService.GetUserSessionAsync(chatId);
         if (session != null)
@@ -148,99 +230,242 @@ public class TelegramBotService : ITelegramBotService
             await _userSessionService.UpdateUserSessionAsync(session);
         }
 
-        await SendMessageAsync(chatId, "✅ You have been logged out from GitHub");
+        await ShowMainMenu(chatId, "✅ Successfully logged out of GitHub");
     }
 
-    private async Task HandleReposCommand(long chatId)
+    private async Task ShowProfile(long chatId)
     {
         try
         {
             var session = await _userSessionService.GetUserSessionAsync(chatId);
             if (session?.GitHubToken == null)
             {
-                await SendMessageAsync(chatId, "❌ Token not found. Please login again.");
-                return;
-            }
-
-            await SendMessageAsync(chatId, "🔄 Fetching repository list...");
-
-            var repos = await _gitHubService.GetUserRepositoriesAsync(session.GitHubToken);
-
-            if (!repos.Any())
-            {
-                await SendMessageAsync(chatId, "📁 You have no repositories.");
-                return;
-            }
-
-            var message = "📚 Your repositories:\n\n";
-            foreach (var repo in repos.Take(10))
-            {
-                message += $"🔗 <a href='{repo.HtmlUrl}'>{repo.FullName}</a>\n";
-                message += $"⭐ {repo.StargazersCount} | 🍴 {repo.ForksCount}\n";
-                message += $"📝 {repo.Description ?? "No description"}\n\n";
-            }
-
-            if (repos.Count > 10)
-            {
-                message += $"... and {repos.Count - 10} more repositories.";
-            }
-
-            await _botClient.SendMessage(
-                chatId,
-                message,
-                parseMode: ParseMode.Html
-            );
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error fetching repositories for user {ChatId}", chatId);
-            await SendMessageAsync(chatId, "❌ Failed to retrieve repositories. Please try again later.");
-        }
-    }
-
-    private async Task HandleProfileCommand(long chatId)
-    {
-        try
-        {
-            var session = await _userSessionService.GetUserSessionAsync(chatId);
-            if (session?.GitHubToken == null)
-            {
-                await SendMessageAsync(chatId, "❌ Token not found. Please login again.");
+                await ShowNotAuthorizedMessage(chatId);
                 return;
             }
 
             var user = await _gitHubService.GetCurrentUserAsync(session.GitHubToken);
 
-            var message = $"👤 GitHub Profile:\n\n" +
-                          $"🏷️ Username: {user.Login}\n" +
-                          $"📛 Name: {user.Name ?? "Not specified"}\n" +
-                          $"📧 Email: {user.Email ?? "Not specified"}\n" +
-                          $"🏢 Company: {user.Company ?? "Not specified"}\n" +
-                          $"📍 Location: {user.Location ?? "Not specified"}\n" +
-                          $"📝 Bio: {user.Bio ?? "Not specified"}\n" +
-                          $"📚 Public Repos: {user.PublicRepos}\n" +
+            session.GitHubUsername = user.Login;
+            await _userSessionService.UpdateUserSessionAsync(session);
+
+            var message = $"👤 <b>GitHub Profile</b>\n\n" +
+                          $"🏷️ <b>Username:</b> {user.Login}\n" +
+                          $"📛 <b>Name:</b> {user.Name ?? "Not specified"}\n" +
+                          $"📧 <b>Email:</b> {user.Email ?? "Not specified"}\n" +
+                          $"🏢 <b>Company:</b> {user.Company ?? "Not specified"}\n" +
+                          $"📍 <b>Location:</b> {user.Location ?? "Not specified"}\n" +
+                          $"📝 <b>Bio:</b> {user.Bio ?? "Not specified"}\n\n" +
+                          $"📊 <b>Statistics:</b>\n" +
+                          $"📚 Public repositories: {user.PublicRepos}\n" +
                           $"👥 Followers: {user.Followers}\n" +
                           $"👤 Following: {user.Following}";
 
-            await SendMessageAsync(chatId, message);
+            var keyboard = new InlineKeyboardMarkup(new[]
+            {
+                new[] { InlineKeyboardButton.WithUrl("🔗 View on GitHub", user.HtmlUrl) },
+                new[] { InlineKeyboardButton.WithCallbackData("⬅️ Back", "back_to_main") }
+            });
+
+            await _botClient.SendMessage(
+                chatId,
+                message,
+                parseMode: ParseMode.Html,
+                replyMarkup: keyboard
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error fetching profile for user {ChatId}", chatId);
-            await SendMessageAsync(chatId, "❌ Failed to retrieve profile. Please try again later.");
+            _logger.LogError(ex, "Error showing profile for user {ChatId}", chatId);
+            await _botClient.SendMessage(
+                chatId,
+                "❌ Error retrieving profile",
+                replyMarkup: new InlineKeyboardMarkup(
+                    InlineKeyboardButton.WithCallbackData("⬅️ Back", "back_to_main")
+                )
+            );
         }
     }
 
-    private async Task HandleDefaultMessage(long chatId, bool isAuthorized)
+    private async Task ShowRepositories(long chatId)
     {
-        if (!isAuthorized)
+        try
         {
-            await SendMessageAsync(chatId, "❌ Please login first with /login");
+            var session = await _userSessionService.GetUserSessionAsync(chatId);
+            if (session?.GitHubToken == null)
+            {
+                await ShowNotAuthorizedMessage(chatId);
+                return;
+            }
+
+            await _botClient.SendMessage(chatId, "🔄 Loading repositories...");
+
+            var repos = await _gitHubService.GetUserRepositoriesAsync(session.GitHubToken);
+
+            if (repos.Count == 0)
+            {
+                await _botClient.SendMessage(
+                    chatId,
+                    "📁 You have no repositories",
+                    replyMarkup: new InlineKeyboardMarkup(
+                        InlineKeyboardButton.WithCallbackData("⬅️ Back", "back_to_main")
+                    )
+                );
+                return;
+            }
+
+            var message = $"📚 <b>Your Repositories</b> ({repos.Count})\n\n";
+            var buttons = new List<List<InlineKeyboardButton>>();
+
+            foreach (var repo in repos.Take(10))
+            {
+                message += $"🔗 <a href='{repo.HtmlUrl}'>{repo.FullName}</a>\n" +
+                           $"⭐ {repo.StargazersCount} | 🍴 {repo.ForksCount} | 📝 {repo.Language ?? "N/A"}\n" +
+                           (string.IsNullOrEmpty(repo.Description)
+                               ? string.Empty
+                               : $"💭 {repo.Description[..Math.Min(repo.Description.Length, 60)]}{(repo.Description.Length > 60 ? "..." : "")}\n") +
+                           "\n";
+
+                buttons.Add(new List<InlineKeyboardButton>
+                {
+                    InlineKeyboardButton.WithCallbackData($"📁 {repo.Name}", $"repo_{repo.Owner.Login}_{repo.Name}")
+                });
+            }
+
+            if (repos.Count > 10)
+            {
+                message += $"... and {repos.Count - 10} more repositories";
+            }
+
+            buttons.Add(new List<InlineKeyboardButton>
+            {
+                InlineKeyboardButton.WithCallbackData("⬅️ Back", "back_to_main")
+            });
+
+            await _botClient.SendMessage(
+                chatId,
+                message,
+                parseMode: ParseMode.Html,
+                replyMarkup: new InlineKeyboardMarkup(buttons)
+            );
         }
-        else
+        catch (Exception ex)
         {
-            await SendMessageAsync(chatId, "🤔 Command not recognized. Use /start to see available commands.");
+            _logger.LogError(ex, "Error showing repositories for user {ChatId}", chatId);
+            await _botClient.SendMessage(
+                chatId,
+                "❌ Error retrieving repositories",
+                replyMarkup: new InlineKeyboardMarkup(
+                    InlineKeyboardButton.WithCallbackData("⬅️ Back", "back_to_main")
+                )
+            );
         }
+    }
+
+    private async Task ShowIssuesMenu(long chatId)
+    {
+        var keyboard = new InlineKeyboardMarkup(new[]
+        {
+            new[]
+            {
+                InlineKeyboardButton.WithCallbackData("📝 Create Issue", "create_issue"),
+                InlineKeyboardButton.WithCallbackData("👀 My Issues", "my_issues")
+            },
+            new[] { InlineKeyboardButton.WithCallbackData("⬅️ Back", "back_to_main") }
+        });
+
+        await _botClient.SendMessage(
+            chatId,
+            "🐛 <b>Issue Management</b>\n\nSelect an action:",
+            parseMode: ParseMode.Html,
+            replyMarkup: keyboard
+        );
+    }
+
+    private async Task HandleRepositoryAction(long chatId, string data)
+    {
+        var parts = data.Split('_', 3);
+        if (parts.Length != 3) return;
+
+        var owner = parts[1];
+        var repoName = parts[2];
+
+        try
+        {
+            var session = await _userSessionService.GetUserSessionAsync(chatId);
+            if (session?.GitHubToken == null)
+            {
+                await ShowNotAuthorizedMessage(chatId);
+                return;
+            }
+
+            var repo = await _gitHubService.GetRepositoryAsync(session.GitHubToken, owner, repoName);
+            var issues = await _gitHubService.GetRepositoryIssuesAsync(session.GitHubToken, owner, repoName);
+
+            var message = $"📁 <b>{repo.FullName}</b>\n\n" +
+                          $"📝 {repo.Description ?? "No description"}\n\n" +
+                          $"📊 <b>Statistics:</b>\n" +
+                          $"⭐ Stars: {repo.StargazersCount}\n" +
+                          $"🍴 Forks: {repo.ForksCount}\n" +
+                          $"👀 Watchers: {repo.WatchersCount}\n" +
+                          $"🐛 Open Issues: {issues.Count}\n" +
+                          $"🏷️ Language: {repo.Language ?? "N/A"}\n" +
+                          $"📅 Created: {repo.CreatedAt:dd.MM.yyyy}\n" +
+                          $"🔄 Updated: {repo.UpdatedAt:dd.MM.yyyy}";
+
+            var keyboard = new InlineKeyboardMarkup(new[]
+            {
+                new[] { InlineKeyboardButton.WithUrl("🔗 View on GitHub", repo.HtmlUrl) },
+                new[]
+                {
+                    InlineKeyboardButton.WithCallbackData($"🐛 Issues ({issues.Count})",
+                        $"repo_issues_{owner}_{repoName}")
+                },
+                new[] { InlineKeyboardButton.WithCallbackData("⬅️ Back to Repos", "show_repositories") }
+            });
+
+            await _botClient.SendMessage(
+                chatId,
+                message,
+                parseMode: ParseMode.Html,
+                replyMarkup: keyboard
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error showing repository {Owner}/{Repo}", owner, repoName);
+            await _botClient.SendMessage(
+                chatId,
+                "❌ Error retrieving repository information",
+                replyMarkup: new InlineKeyboardMarkup(
+                    InlineKeyboardButton.WithCallbackData("⬅️ Back", "show_repositories")
+                )
+            );
+        }
+    }
+
+    private async Task HandleIssueAction(long chatId, string data)
+    {
+        await _botClient.SendMessage(
+            chatId,
+            "🚧 Feature under development",
+            replyMarkup: new InlineKeyboardMarkup(
+                InlineKeyboardButton.WithCallbackData("⬅️ Back", "back_to_main")
+            )
+        );
+    }
+
+    private async Task ShowNotAuthorizedMessage(long chatId)
+    {
+        await _botClient.SendMessage(
+            chatId,
+            "❌ GitHub authorization required",
+            replyMarkup: new InlineKeyboardMarkup(new[]
+            {
+                new[] { InlineKeyboardButton.WithCallbackData("🔐 Authorize", "auth_github") },
+                new[] { InlineKeyboardButton.WithCallbackData("⬅️ Back", "back_to_main") }
+            })
+        );
     }
 
     public async Task SendMessageAsync(long chatId, string message)
@@ -257,5 +482,10 @@ public class TelegramBotService : ITelegramBotService
         };
 
         await _botClient.SendMessage(chatId, message, replyMarkup: keyboardMarkup);
+    }
+
+    public async Task SendMessageAsync(long chatId, string message, ParseMode parseMode)
+    {
+        await _botClient.SendMessage(chatId, message, parseMode: parseMode);
     }
 }

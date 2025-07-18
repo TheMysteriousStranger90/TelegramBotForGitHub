@@ -6,50 +6,50 @@ using System.Text.Json;
 using Telegram.Bot.Types;
 using TelegramBotForGitHub.Services.Interfaces;
 
-namespace TelegramBotForGitHub.Functions
+namespace TelegramBotForGitHub.Functions;
+
+public class TelegramWebhookFunction
 {
-    public class TelegramWebhookFunction
+    private readonly ITelegramBotService _telegramBotService;
+    private readonly ILogger<TelegramWebhookFunction> _logger;
+
+    public TelegramWebhookFunction(ITelegramBotService telegramBotService, ILogger<TelegramWebhookFunction> logger)
     {
-        private readonly ITelegramBotService _telegramBotService;
-        private readonly ILogger<TelegramWebhookFunction> _logger;
+        _telegramBotService = telegramBotService;
+        _logger = logger;
+    }
 
-        public TelegramWebhookFunction(ITelegramBotService telegramBotService, ILogger<TelegramWebhookFunction> logger)
+    [Function("TelegramWebhook")]
+    public async Task<HttpResponseData> Run(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "telegram/webhook")]
+        HttpRequestData req)
+    {
+        try
         {
-            _telegramBotService = telegramBotService;
-            _logger = logger;
+            var requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+
+            if (string.IsNullOrEmpty(requestBody))
+            {
+                _logger.LogWarning("Empty request body received");
+                return req.CreateResponse(HttpStatusCode.BadRequest);
+            }
+
+            var update = JsonSerializer.Deserialize<Update>(requestBody);
+            if (update == null)
+            {
+                _logger.LogWarning("Failed to deserialize update");
+                return req.CreateResponse(HttpStatusCode.BadRequest);
+            }
+
+            await _telegramBotService.HandleUpdateAsync(update);
+
+            var response = req.CreateResponse(HttpStatusCode.OK);
+            return response;
         }
-
-        [Function("TelegramWebhook")]
-        public async Task<HttpResponseData> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "telegram/webhook")] HttpRequestData req)
+        catch (Exception ex)
         {
-            try
-            {
-                var requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-                
-                if (string.IsNullOrEmpty(requestBody))
-                {
-                    _logger.LogWarning("Empty request body received");
-                    return req.CreateResponse(HttpStatusCode.BadRequest);
-                }
-
-                var update = JsonSerializer.Deserialize<Update>(requestBody);
-                if (update == null)
-                {
-                    _logger.LogWarning("Failed to deserialize update");
-                    return req.CreateResponse(HttpStatusCode.BadRequest);
-                }
-
-                await _telegramBotService.HandleUpdateAsync(update);
-
-                var response = req.CreateResponse(HttpStatusCode.OK);
-                return response;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error processing Telegram webhook");
-                return req.CreateResponse(HttpStatusCode.InternalServerError);
-            }
+            _logger.LogError(ex, "Error processing Telegram webhook");
+            return req.CreateResponse(HttpStatusCode.InternalServerError);
         }
     }
 }
