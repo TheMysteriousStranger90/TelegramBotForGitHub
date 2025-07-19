@@ -1,4 +1,4 @@
-Write-Host "Starting Telegram Bot for GitHub..." -ForegroundColor Green
+﻿Write-Host "Starting Telegram Bot for GitHub..." -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Cyan
 
 # Check if Docker is running
