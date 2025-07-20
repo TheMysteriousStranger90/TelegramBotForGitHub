@@ -2,7 +2,7 @@
 
 namespace TelegramBotForGitHub.Models;
 
-public class GitHubAuthState
+public class GitHubOAuthToken
 {
     [JsonProperty("id")]
     public string Id { get; set; }
@@ -10,19 +10,22 @@ public class GitHubAuthState
     [JsonProperty("userId")]
     public long UserId { get; set; }
         
-    [JsonProperty("state")]
-    public string State { get; set; }
+    [JsonProperty("accessToken")]
+    public string AccessToken { get; set; }
+        
+    [JsonProperty("tokenType")]
+    public string TokenType { get; set; } = "bearer";
+        
+    [JsonProperty("scope")]
+    public string Scope { get; set; }
         
     [JsonProperty("createdAt")]
     public DateTime CreatedAt { get; set; }
         
-    [JsonProperty("expiresAt")]
-    public DateTime ExpiresAt { get; set; }
-        
-    [JsonProperty("isUsed")]
-    public bool IsUsed { get; set; } = false;
+    [JsonProperty("isActive")]
+    public bool IsActive { get; set; } = true;
 
-    public GitHubAuthState()
+    public GitHubOAuthToken()
     {
         Id = Guid.NewGuid().ToString();
         CreatedAt = DateTime.UtcNow;
