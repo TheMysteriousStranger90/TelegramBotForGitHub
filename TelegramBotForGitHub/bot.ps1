@@ -78,42 +78,36 @@ try {
     Write-Host "Azure Functions are not running yet on port $selectedPort" -ForegroundColor Yellow
 }
 
-# Check for Cosmos DB Emulator in Docker with more flexible name matching
-Write-Host "Checking Cosmos DB Emulator in Docker..." -ForegroundColor Yellow
-$cosmosContainers = docker ps --filter "name=cosmos" --format "{{.Names}}" 2>&1
-$cosmosRunning = $false
+#==============================================================
+# MODIFIED BLOCK: Check for Azurite Emulator instead of Cosmos DB
+#==============================================================
+Write-Host "Checking Azurite Emulator in Docker..." -ForegroundColor Yellow
+$azuriteContainer = $null
+$azuriteRunning = $false
 
-if ($cosmosContainers -match "cosmos") {
-    foreach ($container in $cosmosContainers.Split("`n")) {
-        if ($container -match "cosmos") {
-            $cosmosContainer = $container.Trim()
-            $cosmosRunning = $true
-            Write-Host "Found Cosmos DB Emulator container: $cosmosContainer ✓" -ForegroundColor Green
-            break
-        }
+# Try to find a container named 'azurite' or similar
+$azuriteContainers = docker ps --filter "name=azurite" --format "{{.Names}}" 2>&1
+if ($azuriteContainers -match "azurite") {
+    $azuriteContainer = $azuriteContainers.Split("`n")[0].Trim()
+    $azuriteRunning = $true
+    Write-Host "Found Azurite container by name: $azuriteContainer ✓" -ForegroundColor Green
+}
+
+# If not found by name, check by image ancestor
+if (-not $azuriteRunning) {
+    $azuriteImages = docker ps --filter "ancestor=mcr.microsoft.com/azure-storage/azurite" --format "{{.Names}}" 2>&1
+    if ($azuriteImages -match "\w+") {
+        $azuriteContainer = $azuriteImages.Split("`n")[0].Trim()
+        $azuriteRunning = $true
+        Write-Host "Found Azurite container by image: $azuriteContainer ✓" -ForegroundColor Green
     }
 }
 
-# If no container with "cosmos" in the name, check with a broader filter
-if (-not $cosmosRunning) {
-    $cosmosImages = docker ps --filter "ancestor=mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator" --format "{{.Names}}" 2>&1
-    if ($cosmosImages -match "\w+") {
-        foreach ($container in $cosmosImages.Split("`n")) {
-            if ($container -match "\w+") {
-                $cosmosContainer = $container.Trim()
-                $cosmosRunning = $true
-                Write-Host "Found Cosmos DB Emulator container: $cosmosContainer ✓" -ForegroundColor Green
-                break
-            }
-        }
-    }
-}
-
-if (-not $cosmosRunning) {
-    Write-Host "WARNING: Cosmos DB Emulator container not found!" -ForegroundColor Red
-    Write-Host "The Cosmos DB Emulator should be running for the application to work properly." -ForegroundColor Yellow
-    Write-Host "Please start it with:" -ForegroundColor Yellow
-    Write-Host "docker run -p 8081:8081 -p 10250-10255:10250-10255 --name=cosmosdb-emulator -e AZURE_COSMOS_EMULATOR_PARTITION_COUNT=1 -e AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE=true mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator" -ForegroundColor White
+if (-not $azuriteRunning) {
+    Write-Host "WARNING: Azurite container not found!" -ForegroundColor Red
+    Write-Host "The Azurite emulator should be running for the application to work properly." -ForegroundColor Yellow
+    Write-Host "Please start it with a command like this (ensure c:\azurite exists):" -ForegroundColor Yellow
+    Write-Host "docker run -d -p 10000:10000 -p 10001:10001 -p 10002:10002 --name azurite-emulator -v c:/azurite:/data mcr.microsoft.com/azure-storage/azurite" -ForegroundColor White
 
     $continue = Read-Host "Continue anyway? (y/n)"
     if ($continue -ne "y") {
@@ -121,31 +115,31 @@ if (-not $cosmosRunning) {
     }
 } else {
     # Check if the container is healthy
-    $containerStatus = docker inspect --format='{{.State.Status}}' $cosmosContainer 2>&1
+    $containerStatus = docker inspect --format='{{.State.Status}}' $azuriteContainer 2>&1
     if ($containerStatus -eq "running") {
-        Write-Host "Cosmos DB Emulator container is running ✓" -ForegroundColor Green
+        Write-Host "Azurite container is running ✓" -ForegroundColor Green
 
-        # Try to verify if the emulator is actually responsive
+        # Try to verify if the emulator is actually responsive by pinging the blob service
         try {
-            $response = Invoke-WebRequest -Uri "https://localhost:8081/_explorer/" -SkipCertificateCheck -TimeoutSec 5 -ErrorAction SilentlyContinue
-            if ($response.StatusCode -eq 200) {
-                Write-Host "Cosmos DB Emulator is responsive ✓" -ForegroundColor Green
-            }
+            # Any response (even an error like 404) means the service is listening.
+            # A connection error will throw an exception.
+            Invoke-WebRequest -Uri "http://127.0.0.1:10000" -TimeoutSec 5 -ErrorAction SilentlyContinue | Out-Null
+            Write-Host "Azurite is responsive ✓" -ForegroundColor Green
         } catch {
-            Write-Host "Cosmos DB Emulator is running but may not be fully initialized yet" -ForegroundColor Yellow
-            Write-Host "The application will continue, but database operations might fail until the emulator is ready" -ForegroundColor Yellow
+            Write-Host "Azurite is running but may not be fully initialized yet" -ForegroundColor Yellow
+            Write-Host "The application will continue, but storage operations might fail until the emulator is ready" -ForegroundColor Yellow
         }
     } else {
-        Write-Host "Cosmos DB Emulator container exists but is not running (status: $containerStatus)" -ForegroundColor Yellow
+        Write-Host "Azurite container exists but is not running (status: $containerStatus)" -ForegroundColor Yellow
         Write-Host "Attempting to start the container..." -ForegroundColor Yellow
 
-        docker start $cosmosContainer 2>&1
+        docker start $azuriteContainer 2>&1
         if ($LASTEXITCODE -eq 0) {
-            Write-Host "Started Cosmos DB Emulator container ✓" -ForegroundColor Green
-            Write-Host "Waiting for Cosmos DB to initialize..." -ForegroundColor Yellow
-            Start-Sleep -Seconds 10  # Give it some time to start up
+            Write-Host "Started Azurite container ✓" -ForegroundColor Green
+            Write-Host "Waiting for Azurite to initialize..." -ForegroundColor Yellow
+            Start-Sleep -Seconds 10 # Give it some time to start up
         } else {
-            Write-Host "Failed to start Cosmos DB Emulator container" -ForegroundColor Red
+            Write-Host "Failed to start Azurite container" -ForegroundColor Red
             $continue = Read-Host "Continue anyway? (y/n)"
             if ($continue -ne "y") {
                 exit
@@ -153,6 +147,9 @@ if (-not $cosmosRunning) {
         }
     }
 }
+#==============================================================
+# END OF MODIFIED BLOCK
+#==============================================================
 
 # Update the local.settings.json with the selected port
 Write-Host "Updating local.settings.json with the selected port..." -ForegroundColor Yellow
@@ -221,7 +218,7 @@ if ($baseUrl -and $botToken -and $baseUrl -ne "https://your-ngrok-url.ngrok-free
     Write-Host "============================================" -ForegroundColor Cyan
     Write-Host "Setting up Telegram webhook..." -ForegroundColor Yellow
 
-    $webhookUrl = "$baseUrl/api/telegram/webhook"
+    $webhookUrl = "$baseUrl/api/webhook/telegram"
     Write-Host "Webhook URL: $webhookUrl" -ForegroundColor Cyan
 
     try {
@@ -325,6 +322,24 @@ Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "Bot startup completed!" -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Cyan
 
+# Display webhook URLs
+Write-Host "Available endpoints:" -ForegroundColor Cyan
+if ($baseUrl) {
+    Write-Host "- GitHub Webhook: $baseUrl/api/webhook/github" -ForegroundColor White
+    Write-Host "- Telegram Webhook: $baseUrl/api/webhook/telegram" -ForegroundColor White
+    Write-Host "- Setup Webhook: $baseUrl/api/setup/webhook" -ForegroundColor White
+    Write-Host "- OAuth Callback: $baseUrl/api/auth/github/callback" -ForegroundColor White
+    Write-Host "- Local Functions: http://localhost:$selectedPort" -ForegroundColor White
+} else {
+    Write-Host "- GitHub Webhook: https://your-ngrok-url.ngrok-free.app/api/webhook/github" -ForegroundColor White
+    Write-Host "- Telegram Webhook: https://your-ngrok-url.ngrok-free.app/api/webhook/telegram" -ForegroundColor White
+    Write-Host "- Setup Webhook: https://your-ngrok-url.ngrok-free.app/api/setup/webhook" -ForegroundColor White
+    Write-Host "- OAuth Callback: https://your-ngrok-url.ngrok-free.app/api/auth/github/callback" -ForegroundColor White
+    Write-Host "- Local Functions: http://localhost:$selectedPort" -ForegroundColor White
+}
+
+Write-Host "============================================" -ForegroundColor Cyan
+
 # Test bot connection if webhook was set up
 if ($baseUrl -and $botToken -and $baseUrl -ne "https://your-ngrok-url.ngrok-free.app") {
     Write-Host "Testing bot connection..." -ForegroundColor Yellow
@@ -346,7 +361,8 @@ if ($baseUrl -and $botToken -and $baseUrl -ne "https://your-ngrok-url.ngrok-free
 
 # Show next steps
 Write-Host "Next steps:" -ForegroundColor Yellow
-Write-Host "1. ✓ Cosmos DB Emulator running in Docker" -ForegroundColor Green
+# MODIFIED LINE: Changed Cosmos DB to Azurite
+Write-Host "1. ✓ Azurite Emulator running in Docker" -ForegroundColor Green
 Write-Host "2. ✓ Azure Functions $(if ($functionsRunning) { "ready on port $selectedPort" } else { "check status" })" -ForegroundColor $(if ($functionsRunning) { "Green" } else { "Yellow" })
 if ($baseUrl -and $botToken) {
     Write-Host "3. ✓ Telegram webhook configured" -ForegroundColor Green

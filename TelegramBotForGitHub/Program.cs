@@ -1,57 +1,86 @@
-using Microsoft.Azure.Cosmos;
+using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Options;
-using TelegramBotForGitHub.Commands.Core;
-using TelegramBotForGitHub.Configuration;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
+using Telegram.Bot;
 using TelegramBotForGitHub.Services;
+using TelegramBotForGitHub.Commands.Core;
+using TelegramBotForGitHub.Commands.GitHubCommands;
+using TelegramBotForGitHub.Converters;
+using TelegramBotForGitHub.Models.Configuration;
 using TelegramBotForGitHub.Services.Interfaces;
 
 var host = new HostBuilder()
-    .ConfigureFunctionsWebApplication()
+    .ConfigureFunctionsWorkerDefaults((WorkerOptions workerOptions) =>
+    {
+    })
     .ConfigureServices((context, services) =>
     {
-        // Configuration mapping corrected to match local.settings.json
-        services.Configure<BotConfiguration>(options =>
-        {
-            options.TelegramBotToken = Environment.GetEnvironmentVariable("Telegram__Token") ?? "";
-            options.GitHub.Token = Environment.GetEnvironmentVariable("GitHub__Token") ?? "";
-            options.GitHub.WebhookSecret = Environment.GetEnvironmentVariable("GitHub__WebhookSecret") ?? "";
-            options.GitHub.ClientId = Environment.GetEnvironmentVariable("GitHub__ClientId") ?? "";
-            options.GitHub.ClientSecret = Environment.GetEnvironmentVariable("GitHub__ClientSecret") ?? "";
-            options.GitHub.AppId = Environment.GetEnvironmentVariable("GitHub__AppId") ?? "";
-            options.GitHub.PrivateKey = Environment.GetEnvironmentVariable("GitHub__PrivateKey") ?? "";
-            options.CosmosDB.ConnectionString = Environment.GetEnvironmentVariable("Cosmos__ConnectionString") ?? "";
-            options.CosmosDB.DatabaseName = Environment.GetEnvironmentVariable("Cosmos__Database") ?? "";
-            options.CosmosDB.ContainerName = Environment.GetEnvironmentVariable("Cosmos__Container") ?? "";
-        });
+        var configuration = context.Configuration;
 
-        // Cosmos DB Client
-        services.AddSingleton<CosmosClient>(provider =>
+        // Register configuration classes
+        services.Configure<GitHubConfiguration>(configuration.GetSection("GitHub"));
+        services.Configure<TelegramConfiguration>(configuration.GetSection("Telegram"));
+
+        // Telegram Bot
+        var telegramToken = configuration["Telegram:Token"];
+        if (!string.IsNullOrEmpty(telegramToken))
         {
-            var config = provider.GetRequiredService<IOptions<BotConfiguration>>().Value;
-            var cosmosClientOptions = new CosmosClientOptions
+            services.AddSingleton<ITelegramBotClient>(provider =>
+                new TelegramBotClient(telegramToken));
+        }
+        
+        JsonConvert.DefaultSettings = () => new JsonSerializerSettings
+        {
+            Converters = { 
+                new UnixDateTimeConverter(),
+                new TelegramEnumConverter()
+            },
+            NullValueHandling = NullValueHandling.Ignore,
+            MissingMemberHandling = MissingMemberHandling.Ignore,
+            Error = (sender, args) =>
             {
-                RequestTimeout = TimeSpan.FromMinutes(5),
-                ConnectionMode = ConnectionMode.Direct,
-                SerializerOptions = new CosmosSerializationOptions
-                {
-                    PropertyNamingPolicy = CosmosPropertyNamingPolicy.CamelCase
-                }
-            };
-            return new CosmosClient(config.CosmosDB.ConnectionString, cosmosClientOptions);
+                args.ErrorContext.Handled = true;
+            }
+        };
+
+        // Services - Replace CosmosDB with Table Storage
+        services.AddScoped<TableStorageService>();
+        services.AddScoped<IDbService>(serviceProvider =>
+        {
+            var innerService = serviceProvider.GetRequiredService<TableStorageService>();
+            return innerService;
         });
         
-        services.AddSingleton<ICommandFactory, CommandFactory>();
+        services.AddScoped<ITelegramService, TelegramService>();
+        services.AddScoped<IGitHubAuthService, GitHubAuthService>();
+
+        // Command Handler
         services.AddScoped<CommandHandler>();
 
-        // Services
-        services.AddScoped<IUserSessionService, UserSessionService>();
-        services.AddScoped<IGitHubService, GitHubService>();
-        services.AddScoped<ITelegramBotService, TelegramBotService>();
+        // Register commands in specific order - UnhandledCommand must be last
+        services.AddScoped<ICommand, StartCommand>();
+        services.AddScoped<ICommand, AuthCommand>();
+        services.AddScoped<ICommand, ProfileCommand>();
+        services.AddScoped<ICommand, HelpCommand>();
+        services.AddScoped<ICommand, LogoutCommand>();
+        services.AddScoped<ICommand, MyReposCommand>();
+        services.AddScoped<ICommand, NotificationsCommand>();
+        services.AddScoped<ICommand, ClearNotificationsCommand>();
+        services.AddScoped<ICommand, SubscribeCommand>();
+        services.AddScoped<ICommand, UnsubscribeCommand>();
+        services.AddScoped<ICommand, ReposCommand>();
+        services.AddScoped<ICommand, StatusCommand>();
+        services.AddScoped<ICommand, PingCommand>();
+
+        // UnhandledCommand should be registered last
+        services.AddScoped<ICommand, UnhandledCommand>();
+
+        // HTTP Client
+        services.AddHttpClient();
         
-        // Background service for cleaning expired auth states
-        services.AddHostedService<AuthStateCleanupService>();
     })
     .Build();
 
