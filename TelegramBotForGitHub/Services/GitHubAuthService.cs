@@ -9,7 +9,7 @@ namespace TelegramBotForGitHub.Services
 {
  public class GitHubAuthService : IGitHubAuthService
     {
-        private readonly IDbService _cosmosDbService;
+        private readonly IDbService _dbService;
         private readonly IConfiguration _configuration;
         private readonly HttpClient _httpClient;
         private readonly ILogger<GitHubAuthService> _logger;
@@ -20,7 +20,7 @@ namespace TelegramBotForGitHub.Services
             HttpClient httpClient,
             ILogger<GitHubAuthService> logger)
         {
-            _cosmosDbService = cosmosDbService;
+            _dbService = cosmosDbService;
             _configuration = configuration;
             _httpClient = httpClient;
             _logger = logger;
@@ -34,7 +34,7 @@ namespace TelegramBotForGitHub.Services
                 _logger.LogInformation("Checking authorization for user {UserId}", userId);
 
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                var token = await _cosmosDbService.GetGitHubTokenAsync(userId);
+                var token = await _dbService.GetGitHubTokenAsync(userId);
                 return token != null && token.IsActive;
             }
             catch (OperationCanceledException)
@@ -65,7 +65,7 @@ namespace TelegramBotForGitHub.Services
                 CreatedAt  = DateTime.UtcNow,
                 ExpiresAt  = DateTime.UtcNow.AddMinutes(10)
             };
-            await _cosmosDbService.CreateAuthStateAsync(authState);
+            await _dbService.CreateAuthStateAsync(authState);
 
             var redirectUri = $"{baseUrl}/api/auth/github/callback";
             var scope       = "repo,user,notifications";
@@ -83,7 +83,7 @@ namespace TelegramBotForGitHub.Services
             {
                 _logger.LogInformation("Exchanging code for token with state {State}", state);
 
-                var authState = await _cosmosDbService.GetAuthStateAsync(state);
+                var authState = await _dbService.GetAuthStateAsync(state);
                 if (authState == null)
                 {
                     _logger.LogWarning("Auth state not found: {State}", state);
@@ -103,7 +103,7 @@ namespace TelegramBotForGitHub.Services
                 }
 
                 authState.IsUsed = true;
-                await _cosmosDbService.UpdateAuthStateAsync(authState);
+                await _dbService.UpdateAuthStateAsync(authState);
 
                 var clientId = _configuration["GitHub:ClientId"];
                 var clientSecret = _configuration["GitHub:ClientSecret"];
@@ -155,7 +155,7 @@ namespace TelegramBotForGitHub.Services
                     CreatedAt = DateTime.UtcNow
                 };
 
-                await _cosmosDbService.CreateOrUpdateTokenAsync(token);
+                await _dbService.CreateOrUpdateTokenAsync(token);
 
                 _logger.LogInformation("Token created for user {UserId}", authState.UserId);
                 return token;
@@ -198,7 +198,7 @@ namespace TelegramBotForGitHub.Services
         {
             try
             {
-                return await _cosmosDbService.GetGitHubTokenAsync(userId);
+                return await _dbService.GetGitHubTokenAsync(userId);
             }
             catch (Exception ex)
             {
@@ -211,7 +211,7 @@ namespace TelegramBotForGitHub.Services
         {
             try
             {
-                await _cosmosDbService.DeactivateUserTokenAsync(userId);
+                await _dbService.DeactivateUserTokenAsync(userId);
             }
             catch (Exception ex)
             {
