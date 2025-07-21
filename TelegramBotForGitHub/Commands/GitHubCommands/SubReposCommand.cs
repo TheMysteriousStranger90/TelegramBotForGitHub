@@ -6,15 +6,15 @@ using TelegramBotForGitHub.Services.Interfaces;
 
 namespace TelegramBotForGitHub.Commands.GitHubCommands;
 
-public class ReposCommand : TextBasedCommand
+public class SubReposCommand : TextBasedCommand
 {
-    protected override string Pattern => "repos";
+    protected override string Pattern => "subrepos";
 
     private readonly ITelegramBotClient _telegramClient;
     private readonly IDbService _dbService;
-    private readonly ILogger<ReposCommand> _logger;
+    private readonly ILogger<SubReposCommand> _logger;
 
-    public ReposCommand(ITelegramBotClient telegramClient, IDbService cosmosDbService, ILogger<ReposCommand> logger)
+    public SubReposCommand(ITelegramBotClient telegramClient, IDbService cosmosDbService, ILogger<SubReposCommand> logger)
     {
         _telegramClient = telegramClient;
         _dbService = cosmosDbService;

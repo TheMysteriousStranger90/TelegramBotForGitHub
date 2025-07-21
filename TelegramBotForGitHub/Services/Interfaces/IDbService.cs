@@ -30,5 +30,6 @@ namespace TelegramBotForGitHub.Services.Interfaces
         
         // Notification logging
         Task LogNotificationEntityAsync(NotificationLogEntity entity);
+        Task<List<NotificationLogEntity>> GetNotificationLogsAsync(long chatId);
     }
 }

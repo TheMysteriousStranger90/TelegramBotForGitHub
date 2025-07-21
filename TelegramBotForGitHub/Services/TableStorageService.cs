@@ -428,6 +428,31 @@ namespace TelegramBotForGitHub.Services
                 throw;
             }
         }
+        
+        public async Task<List<NotificationLogEntity>> GetNotificationLogsAsync(long chatId)
+        {
+            try
+            {
+                var query = _tableClient.QueryAsync<NotificationLogEntity>(
+                    entity => entity.PartitionKey == "NotificationLog" && entity.ChatId == chatId);
+
+                var logs = new List<NotificationLogEntity>();
+                await foreach (var entity in query)
+                {
+                    logs.Add(entity);
+                }
+
+                return logs
+                    .OrderByDescending(e => e.CreatedAt)
+                    .Take(10)
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving notification logs for chat {ChatId}", chatId);
+                throw;
+            }
+        }
 
         public async Task<List<ChatSubscription>> GetSubscriptionsAsync(string repositoryUrl)
         {

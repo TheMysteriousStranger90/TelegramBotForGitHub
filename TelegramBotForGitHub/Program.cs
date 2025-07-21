@@ -71,14 +71,16 @@ var host = new HostBuilder()
         services.AddScoped<ICommand, UserIssuesCommand>();
         services.AddScoped<ICommand, MyPullRequestsCommand>();
         services.AddScoped<ICommand, UserPullRequestsCommand>();
-        
+        services.AddScoped<ICommand, SubReposCommand>();
+        services.AddScoped<ICommand, SubscribeCommand>();
+        services.AddScoped<ICommand, UnsubscribeCommand>();
+        services.AddScoped<ICommand, SubNotificationsCommand>();
         
         
         services.AddScoped<ICommand, NotificationsCommand>();
-        services.AddScoped<ICommand, ClearNotificationsCommand>();
-        services.AddScoped<ICommand, SubscribeCommand>();
-        services.AddScoped<ICommand, UnsubscribeCommand>();
-        services.AddScoped<ICommand, ReposCommand>();
+
+
+
         
         services.AddScoped<ICommand, UnhandledCommand>();
 
