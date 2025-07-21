@@ -9,13 +9,14 @@ namespace TelegramBotForGitHub.Commands.GitHubCommands;
 public class SubReposCommand : TextBasedCommand
 {
     protected override string Pattern => "subrepos";
-
+    private readonly IGitHubAuthService _authService;
     private readonly ITelegramBotClient _telegramClient;
     private readonly IDbService _dbService;
     private readonly ILogger<SubReposCommand> _logger;
 
-    public SubReposCommand(ITelegramBotClient telegramClient, IDbService cosmosDbService, ILogger<SubReposCommand> logger)
+    public SubReposCommand(IGitHubAuthService authService, ITelegramBotClient telegramClient, IDbService cosmosDbService, ILogger<SubReposCommand> logger)
     {
+        _authService = authService;
         _telegramClient = telegramClient;
         _dbService = cosmosDbService;
         _logger = logger;
@@ -23,8 +24,33 @@ public class SubReposCommand : TextBasedCommand
 
     public override async Task Execute(Message message)
     {
+        var userId = message.From!.Id;
+        
         try
         {
+            var isAuthorized = await _authService.IsUserAuthorizedAsync(userId);
+            
+            if (!isAuthorized)
+            {
+                await _telegramClient.SendMessage(
+                    chatId: message.Chat.Id,
+                    text: "🔐 You need to authorize first. Use `/auth` command to connect your GitHub account.",
+                    parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
+                    cancellationToken: CancellationToken.None);
+                return;
+            }
+
+            var token = await _authService.GetUserTokenAsync(userId);
+            if (token == null)
+            {
+                await _telegramClient.SendMessage(
+                    chatId: message.Chat.Id,
+                    text: "❌ Authorization token not found. Please use `/auth` to authorize again.",
+                    parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
+                    cancellationToken: CancellationToken.None);
+                return;
+            }
+            
             var subscriptions = await _dbService.GetChatSubscriptionsAsync(message.Chat.Id);
             var activeSubscriptions = subscriptions.Where(s => s.IsActive).ToList();
             

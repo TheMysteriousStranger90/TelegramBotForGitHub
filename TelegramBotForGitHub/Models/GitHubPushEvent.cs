@@ -17,7 +17,7 @@ public class GitHubPushEvent
     public GitHubRepository? Repository { get; set; }
     
     [JsonProperty("pusher")]
-    public GitHubUser? Pusher { get; set; }
+    public GitHubUserProfile? Pusher { get; set; }
     
     [JsonProperty("commits")]
     public List<GitHubCommit>? Commits { get; set; }
