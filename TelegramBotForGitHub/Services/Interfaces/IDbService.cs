@@ -4,11 +4,6 @@ namespace TelegramBotForGitHub.Services.Interfaces
 {
     public interface IDbService
     {
-        // UserToken methods
-        Task<UserTokenEntity?> GetUserTokenEntityAsync(long userId);
-        Task SaveUserTokenEntityAsync(UserTokenEntity entity);
-        Task DeleteUserTokenEntityAsync(long userId);
-        
         // ChatSubscription methods
         Task<ChatSubscription> GetSubscriptionAsync(long chatId, string repositoryUrl);
         Task CreateSubscriptionAsync(ChatSubscription subscription);
