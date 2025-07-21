@@ -76,12 +76,6 @@ var host = new HostBuilder()
         services.AddScoped<ICommand, UnsubscribeCommand>();
         services.AddScoped<ICommand, SubNotificationsCommand>();
         
-        
-        services.AddScoped<ICommand, NotificationsCommand>();
-
-
-
-        
         services.AddScoped<ICommand, UnhandledCommand>();
 
         // HTTP Client
