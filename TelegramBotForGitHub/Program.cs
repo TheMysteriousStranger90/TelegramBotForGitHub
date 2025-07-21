@@ -60,22 +60,21 @@ var host = new HostBuilder()
         // Command Handler
         services.AddScoped<CommandHandler>();
 
-        // Register commands in specific order - UnhandledCommand must be last
+        // Register commands
         services.AddScoped<ICommand, StartCommand>();
         services.AddScoped<ICommand, AuthCommand>();
         services.AddScoped<ICommand, ProfileCommand>();
         services.AddScoped<ICommand, HelpCommand>();
         services.AddScoped<ICommand, LogoutCommand>();
         services.AddScoped<ICommand, MyReposCommand>();
+        services.AddScoped<ICommand, UserReposCommand>();
         services.AddScoped<ICommand, NotificationsCommand>();
         services.AddScoped<ICommand, ClearNotificationsCommand>();
         services.AddScoped<ICommand, SubscribeCommand>();
         services.AddScoped<ICommand, UnsubscribeCommand>();
         services.AddScoped<ICommand, ReposCommand>();
         services.AddScoped<ICommand, StatusCommand>();
-        services.AddScoped<ICommand, PingCommand>();
-
-        // UnhandledCommand should be registered last
+        
         services.AddScoped<ICommand, UnhandledCommand>();
 
         // HTTP Client

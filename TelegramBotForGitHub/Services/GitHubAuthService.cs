@@ -73,7 +73,7 @@ namespace TelegramBotForGitHub.Services
             var scopes = new[]
             {
                 "repo",           // Access to repositories
-                "notifications",  // Access to notifications
+                "read:notifications",  // Access to notifications
                 "user:email",     // Access to user email
                 "read:user"       // Read user profile
             };
