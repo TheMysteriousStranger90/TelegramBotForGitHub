@@ -1,7 +1,6 @@
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Telegram.Bot;
@@ -46,7 +45,7 @@ var host = new HostBuilder()
             }
         };
 
-        // Services - Replace CosmosDB with Table Storage
+        // Services
         services.AddScoped<TableStorageService>();
         services.AddScoped<IDbService>(serviceProvider =>
         {
@@ -68,12 +67,18 @@ var host = new HostBuilder()
         services.AddScoped<ICommand, LogoutCommand>();
         services.AddScoped<ICommand, MyReposCommand>();
         services.AddScoped<ICommand, UserReposCommand>();
+        services.AddScoped<ICommand, MyIssuesCommand>();
+        services.AddScoped<ICommand, UserIssuesCommand>();
+        services.AddScoped<ICommand, MyPullRequestsCommand>();
+        services.AddScoped<ICommand, UserPullRequestsCommand>();
+        
+        
+        
         services.AddScoped<ICommand, NotificationsCommand>();
         services.AddScoped<ICommand, ClearNotificationsCommand>();
         services.AddScoped<ICommand, SubscribeCommand>();
         services.AddScoped<ICommand, UnsubscribeCommand>();
         services.AddScoped<ICommand, ReposCommand>();
-        services.AddScoped<ICommand, StatusCommand>();
         
         services.AddScoped<ICommand, UnhandledCommand>();
 
