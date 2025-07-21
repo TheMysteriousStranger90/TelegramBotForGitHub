@@ -7,7 +7,7 @@ using TelegramBotForGitHub.Services.Interfaces;
 
 namespace TelegramBotForGitHub.Services
 {
- public class GitHubAuthService : IGitHubAuthService
+    public class GitHubAuthService : IGitHubAuthService
     {
         private readonly IDbService _dbService;
         private readonly IConfiguration _configuration;
@@ -27,7 +27,7 @@ namespace TelegramBotForGitHub.Services
             _httpClient.Timeout = TimeSpan.FromSeconds(30);
         }
 
-           public async Task<bool> IsUserAuthorizedAsync(long userId)
+        public async Task<bool> IsUserAuthorizedAsync(long userId)
         {
             try
             {
@@ -52,29 +52,42 @@ namespace TelegramBotForGitHub.Services
         public async Task<string> GetAuthorizationUrl(long userId)
         {
             var clientId = _configuration["GitHub:ClientId"];
-            var baseUrl  = _configuration["BaseUrl"];
+            var baseUrl = _configuration["BaseUrl"];
             if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(baseUrl))
                 throw new InvalidOperationException("OAuth configuration missing");
 
             var state = Guid.NewGuid().ToString();
             var authState = new GitHubAuthState
             {
-                Id         = Guid.NewGuid().ToString(),
-                UserId     = userId,
-                State      = state,
-                CreatedAt  = DateTime.UtcNow,
-                ExpiresAt  = DateTime.UtcNow.AddMinutes(10)
+                Id = Guid.NewGuid().ToString(),
+                UserId = userId,
+                State = state,
+                CreatedAt = DateTime.UtcNow,
+                ExpiresAt = DateTime.UtcNow.AddMinutes(10)
             };
             await _dbService.CreateAuthStateAsync(authState);
 
             var redirectUri = $"{baseUrl}/api/auth/github/callback";
-            var scope       = "repo,user,notifications";
-            return
-                $"https://github.com/login/oauth/authorize" +
-                $"?client_id={clientId}" +
-                $"&redirect_uri={Uri.EscapeDataString(redirectUri)}" +
-                $"&scope={scope}" +
-                $"&state={state}";
+            
+            // Include ALL necessary scopes for notifications
+            var scopes = new[]
+            {
+                "repo",           // Access to repositories
+                "notifications",  // Access to notifications
+                "user:email",     // Access to user email
+                "read:user"       // Read user profile
+            };
+            
+            var scope = string.Join(" ", scopes);
+            
+            var authUrl = $"https://github.com/login/oauth/authorize" +
+                         $"?client_id={clientId}" +
+                         $"&redirect_uri={Uri.EscapeDataString(redirectUri)}" +
+                         $"&scope={Uri.EscapeDataString(scope)}" +
+                         $"&state={state}";
+
+            _logger.LogInformation("Generated auth URL for user {UserId} with scopes: {Scopes}", userId, scope);
+            return authUrl;
         }
 
         public async Task<GitHubOAuthToken?> ExchangeCodeForTokenAsync(string code, string state)
@@ -137,6 +150,8 @@ namespace TelegramBotForGitHub.Services
                 }
 
                 var responseContent = await response.Content.ReadAsStringAsync();
+                _logger.LogInformation("Token exchange response: {Response}", responseContent);
+                
                 var tokenResponse = JsonConvert.DeserializeObject<dynamic>(responseContent);
 
                 if (tokenResponse?.access_token == null)
@@ -155,9 +170,17 @@ namespace TelegramBotForGitHub.Services
                     CreatedAt = DateTime.UtcNow
                 };
 
+                // Log the granted scopes for debugging
+                _logger.LogInformation("Token created for user {UserId} with scopes: {Scopes}", 
+                    authState.UserId, token.Scope);
+
                 await _dbService.CreateOrUpdateTokenAsync(token);
 
-                _logger.LogInformation("Token created for user {UserId}", authState.UserId);
+                // Verify the token has notifications scope
+                var grantedScopes = await GetTokenScopesAsync(token.AccessToken);
+                _logger.LogInformation("Verified token scopes for user {UserId}: {VerifiedScopes}", 
+                    authState.UserId, string.Join(", ", grantedScopes));
+
                 return token;
             }
             catch (Exception ex)
@@ -167,14 +190,39 @@ namespace TelegramBotForGitHub.Services
             }
         }
 
+        public async Task<string[]> GetTokenScopesAsync(string accessToken)
+        {
+            try
+            {
+                _httpClient.DefaultRequestHeaders.Clear();
+                _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {accessToken}");
+                _httpClient.DefaultRequestHeaders.Add("User-Agent", "TelegramBotForGitHub");
+                _httpClient.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
+
+                var response = await _httpClient.GetAsync("https://api.github.com/user");
+
+                if (response.Headers.TryGetValues("X-OAuth-Scopes", out var scopes))
+                {
+                    return scopes.First().Split(',').Select(s => s.Trim()).ToArray();
+                }
+
+                return Array.Empty<string>();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting token scopes");
+                return Array.Empty<string>();
+            }
+        }
+
         public async Task<GitHubUserProfile?> GetUserProfileAsync(string accessToken)
         {
             try
             {
                 _httpClient.DefaultRequestHeaders.Clear();
-                _httpClient.DefaultRequestHeaders.Add("Authorization", $"token {accessToken}");
+                _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {accessToken}");
                 _httpClient.DefaultRequestHeaders.Add("User-Agent", "TelegramBotForGitHub");
-                _httpClient.DefaultRequestHeaders.Add("Accept", "application/vnd.github.v3+json");
+                _httpClient.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
 
                 var response = await _httpClient.GetAsync("https://api.github.com/user");
 
@@ -193,7 +241,7 @@ namespace TelegramBotForGitHub.Services
                 return null;
             }
         }
-        
+
         public async Task<GitHubOAuthToken?> GetUserTokenAsync(long userId)
         {
             try
