@@ -65,7 +65,6 @@ namespace TelegramBotForGitHub.Functions
                                        $"• `/profile` - View your GitHub profile\n" +
                                        $"• `/myrepos` - List your repositories\n" +
                                        $"• `/subscribe owner/repo` - Subscribe to notifications\n" +
-                                       $"• `/notifications` - Check GitHub notifications\n\n" +
                                        $"Happy coding! 🚀";
 
                     try

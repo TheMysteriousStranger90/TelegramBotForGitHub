@@ -11,7 +11,6 @@ namespace TelegramBotForGitHub.Services.Interfaces
         Task<List<ChatSubscription>> GetChatSubscriptionsAsync(long chatId);
         Task<List<ChatSubscription>> GetSubscriptionsForRepositoryAsync(string repositoryUrl);
         Task<List<ChatSubscription>> GetSubscriptionsAsync(string repositoryUrl);
-        Task<bool> IsUserAuthorizedAsync(long userId);
         
         // GitHub OAuth methods
         Task<GitHubOAuthToken> GetGitHubTokenAsync(long userId);

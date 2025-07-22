@@ -326,12 +326,6 @@ namespace TelegramBotForGitHub.Services
                 throw;
             }
         }
-        
-        public async Task<bool> IsUserAuthorizedAsync(long userId)
-        {
-            var token = await GetGitHubTokenAsync(userId);
-            return token != null && token.IsActive;
-        }
 
         #endregion
         
