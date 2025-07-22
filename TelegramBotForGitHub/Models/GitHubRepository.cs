@@ -23,5 +23,5 @@ public class GitHubRepository
     public bool Private { get; set; }
     
     [JsonProperty("owner")]
-    public GitHubUser? Owner { get; set; }
+    public GitHubUserProfile? Owner { get; set; }
 }

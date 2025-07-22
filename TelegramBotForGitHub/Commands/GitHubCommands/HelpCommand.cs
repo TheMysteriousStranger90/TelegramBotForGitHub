@@ -13,24 +13,30 @@ public class HelpCommand : TextBasedCommand
 
 **Authentication:**
 /auth - Authorize with GitHub
-/profile - Show your GitHub profile
 /logout - Logout from GitHub
-/status - Show bot and authorization status
-
-**Repository Management:**
-/myrepos - Show your repositories
-/subscribe <repo> - Subscribe to repository notifications
-/unsubscribe <repo> - Unsubscribe from repository
-/repos - List your subscribed repositories
-
-**Notifications:**
-/notifications - Show recent GitHub notifications
-/clearnotifications - Mark all notifications as read
 
 **Info:**
 /help - Show this help message
 /start - Show welcome message
-/ping - Test bot connection
+
+**Profile:**
+/profile - Show your GitHub profile
+/myrepos - Show your GitHub repositories
+/myissues - Show your GitHub issues
+/mypullrequests - Show your GitHub pull requests
+/mynotifications - Show your GitHub notifications
+
+**Another User's Info:**
+/userrepos <username> - Show user's repositories
+/userissues <username> - Show user's issues
+/userpullrequests <username> - Show user's pull requests
+/usernotifications <username> - Show user's notifications
+
+**Repository Management:**
+/subrepos - List your subscribed repositories
+/subscribe <repo> - Subscribe to repository notifications
+/unsubscribe <repo> - Unsubscribe from repository
+/subnotifications - List your subscribed notifications
 
 **Examples:**
 /subscribe microsoft/dotnet
