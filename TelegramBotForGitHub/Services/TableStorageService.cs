@@ -25,81 +25,7 @@ namespace TelegramBotForGitHub.Services
 
             _tableClient.CreateIfNotExists();
         }
-
-        #region UserToken Methods
-
-        public async Task<UserTokenEntity?> GetUserTokenEntityAsync(long userId)
-        {
-            try
-            {
-                var response = await _tableClient.GetEntityAsync<UserTokenEntity>("UserToken", userId.ToString());
-                return response.Value;
-            }
-            catch (RequestFailedException ex) when (ex.Status == 404)
-            {
-                return null;
-            }
-            catch (RequestFailedException ex) when (ex.Status == 503)
-            {
-                _logger.LogWarning(ex, "Table Storage service unavailable when getting user token for {UserId}", userId);
-                throw new InvalidOperationException(
-                    "Database service is temporarily unavailable. Please try again later.", ex);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting user token for {UserId}", userId);
-                throw;
-            }
-        }
-
-        public async Task SaveUserTokenEntityAsync(UserTokenEntity entity)
-        {
-            try
-            {
-                entity.UpdatedAt = DateTime.UtcNow;
-                await _tableClient.UpsertEntityAsync(entity);
-                _logger.LogInformation("User token entity saved for user {UserId}", entity.UserId);
-            }
-            catch (RequestFailedException ex) when (ex.Status == 503)
-            {
-                _logger.LogWarning(ex, "Table Storage service unavailable when saving user token for {UserId}",
-                    entity.UserId);
-                throw new InvalidOperationException(
-                    "Database service is temporarily unavailable. Please try again later.", ex);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error saving user token for {UserId}", entity.UserId);
-                throw;
-            }
-        }
-
-        public async Task DeleteUserTokenEntityAsync(long userId)
-        {
-            try
-            {
-                await _tableClient.DeleteEntityAsync("UserToken", userId.ToString());
-                _logger.LogInformation("User token entity deleted for user {UserId}", userId);
-            }
-            catch (RequestFailedException ex) when (ex.Status == 404)
-            {
-                _logger.LogInformation("User token entity not found for deletion, user {UserId}", userId);
-            }
-            catch (RequestFailedException ex) when (ex.Status == 503)
-            {
-                _logger.LogWarning(ex, "Table Storage service unavailable when deleting user token for {UserId}", userId);
-                throw new InvalidOperationException(
-                    "Database service is temporarily unavailable. Please try again later.", ex);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error deleting user token for {UserId}", userId);
-                throw;
-            }
-        }
         
-        #endregion
-
         #region GitHub OAuth Methods
 
         public async Task<GitHubOAuthToken> GetGitHubTokenAsync(long userId)
@@ -204,7 +130,6 @@ namespace TelegramBotForGitHub.Services
         {
             try
             {
-                // Query by state - we need to scan since state is not the row key
                 var query = _tableClient.QueryAsync<GitHubAuthStateEntity>(
                     entity => entity.PartitionKey == "GitHubAuthState" && entity.State == state);
 
@@ -253,6 +178,11 @@ namespace TelegramBotForGitHub.Services
         #endregion
 
         #region ChatSubscription Methods
+        
+        public async Task<List<ChatSubscription>> GetSubscriptionsAsync(string repositoryUrl)
+        {
+            return await GetSubscriptionsForRepositoryAsync(repositoryUrl);
+        }
 
         public async Task<ChatSubscription> GetSubscriptionAsync(long chatId, string repositoryUrl)
         {
@@ -396,12 +326,6 @@ namespace TelegramBotForGitHub.Services
                 throw;
             }
         }
-        
-        public async Task<bool> IsUserAuthorizedAsync(long userId)
-        {
-            var token = await GetGitHubTokenAsync(userId);
-            return token != null && token.IsActive;
-        }
 
         #endregion
         
@@ -428,12 +352,32 @@ namespace TelegramBotForGitHub.Services
                 throw;
             }
         }
-
-        public async Task<List<ChatSubscription>> GetSubscriptionsAsync(string repositoryUrl)
+        
+        public async Task<List<NotificationLogEntity>> GetNotificationLogsAsync(long chatId)
         {
-            return await GetSubscriptionsForRepositoryAsync(repositoryUrl);
-        }
+            try
+            {
+                var query = _tableClient.QueryAsync<NotificationLogEntity>(
+                    entity => entity.PartitionKey == "NotificationLog" && entity.ChatId == chatId);
 
+                var logs = new List<NotificationLogEntity>();
+                await foreach (var entity in query)
+                {
+                    logs.Add(entity);
+                }
+
+                return logs
+                    .OrderByDescending(e => e.CreatedAt)
+                    .Take(10)
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving notification logs for chat {ChatId}", chatId);
+                throw;
+            }
+        }
+        
         #endregion
     }
 }

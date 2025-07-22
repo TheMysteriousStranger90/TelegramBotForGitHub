@@ -23,7 +23,7 @@ public class GitHubPullRequest
     public string? HtmlUrl { get; set; }
     
     [JsonProperty("user")]
-    public GitHubUser? User { get; set; }
+    public GitHubUserProfile? User { get; set; }
     
     [JsonProperty("head")]
     public GitHubPullRequestBranch? Head { get; set; }

@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Text;
+using System.Text.Json;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using TelegramBotForGitHub.Commands.Core;
@@ -27,144 +28,111 @@ public class MyReposCommand : TextBasedCommand
 
     public override async Task Execute(Message message)
     {
+        var chatId = message.Chat.Id;
         var userId = message.From!.Id;
 
-        var isAuthorized = await _authService.IsUserAuthorizedAsync(userId);
-        if (!isAuthorized)
+        if (!await _authService.IsUserAuthorizedAsync(userId))
         {
-            await _telegramClient.SendMessage(
-                chatId: message.Chat.Id,
-                text: "🔐 You need to authorize with GitHub first!\n\n" +
-                      "Use `/auth` to connect your GitHub account.",
-                parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                cancellationToken: CancellationToken.None);
+            await _telegramClient.SendMessage(chatId, "🔐 You need to authorize with GitHub first! Use `/auth`.");
             return;
         }
 
-        var userToken = await _authService.GetUserTokenAsync(userId);
-        if (userToken == null)
+        var token = await _authService.GetUserTokenAsync(userId);
+        if (token == null)
         {
-            await _telegramClient.SendMessage(
-                chatId: message.Chat.Id,
-                text: "❌ Unable to retrieve your GitHub token.\n\n" +
-                      "Please try `/logout` and then `/auth` to re-authorize.",
-                parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                cancellationToken: CancellationToken.None);
+            await _telegramClient.SendMessage(chatId,
+                "❌ Unable to retrieve your GitHub token. Try `/logout` + `/auth`.");
             return;
         }
+
+        _httpClient.DefaultRequestHeaders.Clear();
+        _httpClient.DefaultRequestHeaders.Add("Authorization", $"token {token.AccessToken}");
+        _httpClient.DefaultRequestHeaders.Add("User-Agent", "TelegramBotForGitHub");
+        _httpClient.DefaultRequestHeaders.Add("Accept", "application/vnd.github.v3+json");
+
+        var allRepos = new List<JsonElement>();
+        int page = 1, perPage = 100;
 
         try
         {
-            _httpClient.DefaultRequestHeaders.Clear();
-            _httpClient.DefaultRequestHeaders.Add("Authorization", $"token {userToken.AccessToken}");
-            _httpClient.DefaultRequestHeaders.Add("User-Agent", "TelegramBotForGitHub");
-            _httpClient.DefaultRequestHeaders.Add("Accept", "application/vnd.github.v3+json");
-
-            var response =
-                await _httpClient.GetAsync("https://api.github.com/user/repos?sort=updated&per_page=10&type=all");
-
-            if (!response.IsSuccessStatusCode)
+            while (true)
             {
-                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                var url = $"https://api.github.com/user/repos?sort=updated&type=all&per_page={perPage}&page={page}";
+                _logger.LogInformation("Fetch page {Page}: {Url}", page, url);
+
+                var resp = await _httpClient.GetAsync(url);
+                if (!resp.IsSuccessStatusCode)
                 {
-                    await _telegramClient.SendMessage(
-                        chatId: message.Chat.Id,
-                        text: "🔐 Your GitHub token has expired.\n\n" +
-                              "Please use `/logout` and then `/auth` to re-authorize.",
-                        parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                        cancellationToken: CancellationToken.None);
+                    _logger.LogError("GitHub API {Status} at {Url}", resp.StatusCode, url);
+                    await _telegramClient.SendMessage(chatId,
+                        $"❌ Failed to fetch repos (page {page}). Status: {resp.StatusCode}");
                     return;
                 }
 
-                await _telegramClient.SendMessage(
-                    chatId: message.Chat.Id,
-                    text: $"❌ Failed to get repositories.\n\n" +
-                          $"Status: {response.StatusCode}\n" +
-                          $"Please try again later.",
-                    parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                    cancellationToken: CancellationToken.None);
+                var pageRepos = JsonSerializer
+                                    .Deserialize<JsonElement[]>(await resp.Content.ReadAsStringAsync())
+                                ?? Array.Empty<JsonElement>();
+
+                if (pageRepos.Length == 0) break;
+
+                allRepos.AddRange(pageRepos);
+                page++;
+            }
+
+            if (allRepos.Count == 0)
+            {
+                await _telegramClient.SendMessage(chatId, "📂 No repositories found.");
                 return;
             }
 
-            var content = await response.Content.ReadAsStringAsync();
-            var repos = JsonSerializer.Deserialize<JsonElement[]>(content);
+            const int chunkSize = 10;
+            var chunks = allRepos
+                .Select((repo, idx) => new { repo, idx })
+                .GroupBy(x => x.idx / chunkSize)
+                .Select(g => g.Select(x => x.repo).ToArray())
+                .ToList();
 
-            if (repos == null || repos.Length == 0)
+            for (int i = 0; i < chunks.Count; i++)
             {
-                await _telegramClient.SendMessage(
-                    chatId: message.Chat.Id,
-                    text: "📂 **No repositories found.**\n\n" +
-                          "You don't have any repositories yet.\n" +
-                          "Create your first repository on GitHub!",
-                    parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                    cancellationToken: CancellationToken.None);
-                return;
+                var sb = new StringBuilder();
+                sb.AppendLine($"📂 Repos (batch {i + 1}/{chunks.Count}, total {allRepos.Count}):\n");
+
+                foreach (var repo in chunks[i])
+                {
+                    var name = repo.GetProperty("full_name").GetString();
+                    var desc = repo.TryGetProperty("description", out var d) && d.ValueKind != JsonValueKind.Null
+                        ? d.GetString()
+                        : "No description";
+                    var lang = repo.TryGetProperty("language", out var l) && l.ValueKind != JsonValueKind.Null
+                        ? l.GetString()
+                        : "Unknown";
+                    var stars = repo.GetProperty("stargazers_count").GetInt32();
+                    var forks = repo.GetProperty("forks_count").GetInt32();
+                    var priv = repo.GetProperty("private").GetBoolean() ? "🔒" : "🌐";
+                    var updated = repo.GetProperty("updated_at").GetString();
+                    var date = DateTime.TryParse(updated, out var dt) ? dt.ToString("yyyy-MM-dd") : "Unknown";
+
+                    sb.AppendLine($"• {name} {priv}");
+                    sb.AppendLine($"  {desc}");
+                    sb.AppendLine($"  {lang} ⭐{stars} 🍴{forks}  {date}\n");
+                }
+
+                try
+                {
+                    await _telegramClient.SendMessage(chatId, sb.ToString());
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to send batch {Batch}", i + 1);
+                    await _telegramClient.SendMessage(chatId, $"⚠️ Failed to send batch {i + 1}. See logs.");
+                }
             }
-
-            var repoMessage = "📂 **Your Recent Repositories:**\n\n";
-            foreach (var repo in repos.Take(10))
-            {
-                var name = repo.GetProperty("full_name").GetString();
-                var description = repo.TryGetProperty("description", out var desc) &&
-                                  !desc.ValueKind.Equals(JsonValueKind.Null)
-                    ? desc.GetString()
-                    : "No description";
-                var language = repo.TryGetProperty("language", out var lang) &&
-                               !lang.ValueKind.Equals(JsonValueKind.Null)
-                    ? lang.GetString()
-                    : "Unknown";
-                var stars = repo.GetProperty("stargazers_count").GetInt32();
-                var forks = repo.GetProperty("forks_count").GetInt32();
-                var isPrivate = repo.GetProperty("private").GetBoolean();
-                var updatedAt = repo.GetProperty("updated_at").GetString();
-
-                var lastUpdated = DateTime.TryParse(updatedAt, out var updateDate)
-                    ? updateDate.ToString("yyyy-MM-dd")
-                    : "Unknown";
-
-                repoMessage += $"• **{name}** {(isPrivate ? "🔒" : "🌐")}\n" +
-                               $"  📝 {description}\n" +
-                               $"  💻 {language} | ⭐ {stars} | 🍴 {forks}\n" +
-                               $"  📅 Updated: {lastUpdated}\n\n";
-            }
-
-            repoMessage += "💡 **Tip:** Use `/subscribe owner/repo` to get notifications for a repository!";
-
-            await _telegramClient.SendMessage(
-                chatId: message.Chat.Id,
-                text: repoMessage,
-                parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                cancellationToken: CancellationToken.None);
-        }
-        catch (JsonException ex)
-        {
-            _logger.LogError(ex, "Error parsing GitHub response for user {UserId}", userId);
-            await _telegramClient.SendMessage(
-                chatId: message.Chat.Id,
-                text: "❌ Error parsing GitHub response.\n\n" +
-                      "Please try again later.",
-                parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                cancellationToken: CancellationToken.None);
-        }
-        catch (HttpRequestException ex)
-        {
-            _logger.LogError(ex, "Network error for user {UserId}", userId);
-            await _telegramClient.SendMessage(
-                chatId: message.Chat.Id,
-                text: "❌ Network error occurred.\n\n" +
-                      "Please check your internet connection and try again.",
-                parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                cancellationToken: CancellationToken.None);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error for user {UserId}", userId);
-            await _telegramClient.SendMessage(
-                chatId: message.Chat.Id,
-                text: "❌ Unexpected error occurred.\n\n" +
-                      "Please try again later or contact support.",
-                parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                cancellationToken: CancellationToken.None);
+            _logger.LogError(ex, "MyReposCommand unexpected error for user {UserId}", userId);
+            await _telegramClient.SendMessage(chatId,
+                "❌ Unexpected error occurred. Please try again later or contact support.");
         }
     }
 }

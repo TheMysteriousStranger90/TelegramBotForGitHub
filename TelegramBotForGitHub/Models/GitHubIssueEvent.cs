@@ -14,5 +14,5 @@ public class GitHubIssueEvent
     public GitHubRepository? Repository { get; set; }
     
     [JsonProperty("sender")]
-    public GitHubUser? Sender { get; set; }
+    public GitHubUserProfile? Sender { get; set; }
 }

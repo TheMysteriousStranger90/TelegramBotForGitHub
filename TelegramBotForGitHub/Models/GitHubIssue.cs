@@ -23,7 +23,7 @@ public class GitHubIssue
     public string? HtmlUrl { get; set; }
     
     [JsonProperty("user")]
-    public GitHubUser? User { get; set; }
+    public GitHubUserProfile? User { get; set; }
     
     [JsonProperty("labels")]
     public List<GitHubLabel>? Labels { get; set; }

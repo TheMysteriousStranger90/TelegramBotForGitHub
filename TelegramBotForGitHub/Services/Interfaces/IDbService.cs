@@ -4,11 +4,6 @@ namespace TelegramBotForGitHub.Services.Interfaces
 {
     public interface IDbService
     {
-        // UserToken methods
-        Task<UserTokenEntity?> GetUserTokenEntityAsync(long userId);
-        Task SaveUserTokenEntityAsync(UserTokenEntity entity);
-        Task DeleteUserTokenEntityAsync(long userId);
-        
         // ChatSubscription methods
         Task<ChatSubscription> GetSubscriptionAsync(long chatId, string repositoryUrl);
         Task CreateSubscriptionAsync(ChatSubscription subscription);
@@ -16,7 +11,6 @@ namespace TelegramBotForGitHub.Services.Interfaces
         Task<List<ChatSubscription>> GetChatSubscriptionsAsync(long chatId);
         Task<List<ChatSubscription>> GetSubscriptionsForRepositoryAsync(string repositoryUrl);
         Task<List<ChatSubscription>> GetSubscriptionsAsync(string repositoryUrl);
-        Task<bool> IsUserAuthorizedAsync(long userId);
         
         // GitHub OAuth methods
         Task<GitHubOAuthToken> GetGitHubTokenAsync(long userId);
@@ -30,5 +24,6 @@ namespace TelegramBotForGitHub.Services.Interfaces
         
         // Notification logging
         Task LogNotificationEntityAsync(NotificationLogEntity entity);
+        Task<List<NotificationLogEntity>> GetNotificationLogsAsync(long chatId);
     }
 }
