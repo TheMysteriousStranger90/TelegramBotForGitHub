@@ -4,6 +4,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{14A97ABC-B26
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TelegramBotForGitHub", "TelegramBotForGitHub\TelegramBotForGitHub.csproj", "{C8C31A40-2362-451E-90EE-F464513960C4}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{DCCA2E31-55E8-46AF-AD85-93DFE0F4B972}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TelegramBotForGitHub.Tests", "TelegramBotForGitHub.Tests\TelegramBotForGitHub.Tests.csproj", "{921C2109-F321-4D40-9B1F-DEC9570301B4}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -11,11 +15,16 @@ Global
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{C8C31A40-2362-451E-90EE-F464513960C4} = {14A97ABC-B26E-4E3F-99DC-2383E77BA6FE}
+		{921C2109-F321-4D40-9B1F-DEC9570301B4} = {DCCA2E31-55E8-46AF-AD85-93DFE0F4B972}
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{C8C31A40-2362-451E-90EE-F464513960C4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{C8C31A40-2362-451E-90EE-F464513960C4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C8C31A40-2362-451E-90EE-F464513960C4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C8C31A40-2362-451E-90EE-F464513960C4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{921C2109-F321-4D40-9B1F-DEC9570301B4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{921C2109-F321-4D40-9B1F-DEC9570301B4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{921C2109-F321-4D40-9B1F-DEC9570301B4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{921C2109-F321-4D40-9B1F-DEC9570301B4}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

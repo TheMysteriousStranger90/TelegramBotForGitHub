@@ -1,7 +1,6 @@
 ﻿using Telegram.Bot;
 using Telegram.Bot.Types;
 using TelegramBotForGitHub.Commands.Core;
-using TelegramBotForGitHub.Services;
 using TelegramBotForGitHub.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
@@ -20,9 +19,9 @@ public class SubscribeCommand : TextBasedCommand
     private readonly ILogger<SubscribeCommand> _logger;
 
     public SubscribeCommand(
-        ITelegramBotClient telegramClient, 
-        IDbService cosmosDbService, 
-        IGitHubAuthService authService, 
+        ITelegramBotClient telegramClient,
+        IDbService cosmosDbService,
+        IGitHubAuthService authService,
         IConfiguration configuration,
         ILogger<SubscribeCommand> logger)
     {
@@ -36,7 +35,7 @@ public class SubscribeCommand : TextBasedCommand
     public override async Task Execute(Message message)
     {
         var parts = message.Text?.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        
+
         if (parts?.Length < 2)
         {
             await _telegramClient.SendMessage(
@@ -53,7 +52,7 @@ public class SubscribeCommand : TextBasedCommand
         }
 
         var repository = parts[1];
-        
+
         if (!repository.Contains('/') || repository.Count(c => c == '/') != 1)
         {
             await _telegramClient.SendMessage(
@@ -90,16 +89,39 @@ public class SubscribeCommand : TextBasedCommand
             var chatId = message.Chat.Id;
             var repositoryUrl = $"https://github.com/{repository}";
 
+            var isAuthorized = await _authService.IsUserAuthorizedAsync(userId);
+            if (!isAuthorized)
+            {
+                await _telegramClient.SendMessage(
+                    chatId: chatId,
+                    text: "🔐 You need to authorize first. Use `/auth` command to connect your GitHub account.",
+                    parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
+                    cancellationToken: CancellationToken.None);
+                return;
+            }
+
             var existingSubscription = await _dbService.GetSubscriptionAsync(chatId, repositoryUrl);
-            
+
             if (existingSubscription != null)
             {
+                if (existingSubscription.IsActive &&
+                    existingSubscription.Events.OrderBy(x => x).SequenceEqual(events.OrderBy(x => x)))
+                {
+                    await _telegramClient.SendMessage(
+                        chatId: chatId,
+                        text:
+                        $"ℹ️ You are already subscribed to **{repository}** for these events: {string.Join(", ", events)}.",
+                        parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
+                        cancellationToken: CancellationToken.None);
+                    return;
+                }
+
                 existingSubscription.Events = events;
                 existingSubscription.IsActive = true;
                 await _dbService.UpdateSubscriptionAsync(existingSubscription);
-                
+
                 await _telegramClient.SendMessage(
-                    chatId: message.Chat.Id,
+                    chatId: chatId,
                     text: $"✅ **Updated subscription for {repository}**\n\n" +
                           $"**Events:** {string.Join(", ", events)}\n\n" +
                           $"You'll receive notifications for these events.",
@@ -116,27 +138,28 @@ public class SubscribeCommand : TextBasedCommand
                 };
 
                 await _dbService.CreateSubscriptionAsync(subscription);
-                
+
                 var webhookUrl = GetWebhookUrl();
                 var responseMessage = $"✅ **Subscribed to {repository}**\n\n" +
-                                    $"**Events:** {string.Join(", ", events)}\n\n" +
-                                    $"You'll receive notifications for these events.\n\n";
+                                      $"**Events:** {string.Join(", ", events)}\n\n" +
+                                      $"You'll receive notifications for these events.\n\n";
 
                 if (!string.IsNullOrEmpty(webhookUrl))
                 {
-                    responseMessage += $"💡 **Tip:** Configure GitHub webhook to `{webhookUrl}` to receive real-time notifications.\n\n" +
-                                     $"**Webhook setup:**\n" +
-                                     $"1. Go to your repository Settings\n" +
-                                     $"2. Click on \"Webhooks\" in the left sidebar\n" +
-                                     $"3. Click \"Add webhook\"\n" +
-                                     $"4. Set Payload URL to: `{webhookUrl}`\n" +
-                                     $"5. Set Content type to: `application/json`\n" +
-                                     $"6. Set Secret to your webhook secret\n" +
-                                     $"7. Select events: {string.Join(", ", events)}";
+                    responseMessage +=
+                        $"💡 **Tip:** Configure GitHub webhook to `{webhookUrl}` to receive real-time notifications.\n\n" +
+                        $"**Webhook setup:**\n" +
+                        $"1. Go to your repository Settings\n" +
+                        $"2. Click on \"Webhooks\" in the left sidebar\n" +
+                        $"3. Click \"Add webhook\"\n" +
+                        $"4. Set Payload URL to: `{webhookUrl}`\n" +
+                        $"5. Set Content type to: `application/json`\n" +
+                        $"6. Set Secret to your webhook secret\n" +
+                        $"7. Select events: {string.Join(", ", events)}";
                 }
 
                 await _telegramClient.SendMessage(
-                    chatId: message.Chat.Id,
+                    chatId: chatId,
                     text: responseMessage,
                     parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
                     cancellationToken: CancellationToken.None);
@@ -144,7 +167,8 @@ public class SubscribeCommand : TextBasedCommand
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error subscribing to repository {Repository} for user {UserId}", repository, message.From?.Id);
+            _logger.LogError(ex, "Error subscribing to repository {Repository} for user {UserId}", repository,
+                message.From?.Id);
             await _telegramClient.SendMessage(
                 chatId: message.Chat.Id,
                 text: $"❌ Failed to subscribe to {repository}\n\n" +
@@ -156,7 +180,6 @@ public class SubscribeCommand : TextBasedCommand
     private string GetWebhookUrl()
     {
         var baseUrl = _configuration["BaseUrl"];
-        
         if (string.IsNullOrEmpty(baseUrl))
         {
             _logger.LogWarning("BaseUrl not configured in settings");
@@ -164,7 +187,6 @@ public class SubscribeCommand : TextBasedCommand
         }
 
         baseUrl = baseUrl.TrimEnd('/');
-        
         return $"{baseUrl}/api/webhook/github";
     }
 }
