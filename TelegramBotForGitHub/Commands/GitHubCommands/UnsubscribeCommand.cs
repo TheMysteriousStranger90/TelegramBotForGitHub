@@ -37,7 +37,7 @@ public class UnsubscribeCommand : TextBasedCommand
             return;
         }
 
-        var repository = parts[1];
+        var repository = parts?[1];
         var repositoryUrl = $"https://github.com/{repository}";
 
         try

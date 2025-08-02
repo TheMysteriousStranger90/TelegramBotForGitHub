@@ -51,9 +51,9 @@ public class SubscribeCommand : TextBasedCommand
             return;
         }
 
-        var repository = parts[1];
+        var repository = parts?[1];
 
-        if (!repository.Contains('/') || repository.Count(c => c == '/') != 1)
+        if (repository != null && (!repository.Contains('/') || repository.Count(c => c == '/') != 1))
         {
             await _telegramClient.SendMessage(
                 chatId: message.Chat.Id,
@@ -65,7 +65,7 @@ public class SubscribeCommand : TextBasedCommand
         }
 
         var events = new List<string> { "push", "pull_request", "issues" };
-        if (parts.Length > 2)
+        if (parts != null && parts.Length > 2)
         {
             events = parts[2].Split(',', StringSplitOptions.RemoveEmptyEntries)
                 .Select(e => e.Trim().ToLower())

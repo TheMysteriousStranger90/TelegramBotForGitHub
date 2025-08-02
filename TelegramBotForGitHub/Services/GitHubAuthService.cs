@@ -69,13 +69,12 @@ namespace TelegramBotForGitHub.Services
 
             var redirectUri = $"{baseUrl}/api/auth/github/callback";
             
-            // Include ALL necessary scopes for notifications
             var scopes = new[]
             {
-                "repo",           // Access to repositories
-                "read:notifications",  // Access to notifications
-                "user:email",     // Access to user email
-                "read:user"       // Read user profile
+                "repo",           
+                "read:notifications",  
+                "user:email",     
+                "read:user"      
             };
             
             var scope = string.Join(" ", scopes);
@@ -170,13 +169,11 @@ namespace TelegramBotForGitHub.Services
                     CreatedAt = DateTime.UtcNow
                 };
 
-                // Log the granted scopes for debugging
                 _logger.LogInformation("Token created for user {UserId} with scopes: {Scopes}", 
                     authState.UserId, token.Scope);
 
                 await _dbService.CreateOrUpdateTokenAsync(token);
 
-                // Verify the token has notifications scope
                 var grantedScopes = await GetTokenScopesAsync(token.AccessToken);
                 _logger.LogInformation("Verified token scopes for user {UserId}: {VerifiedScopes}", 
                     authState.UserId, string.Join(", ", grantedScopes));
