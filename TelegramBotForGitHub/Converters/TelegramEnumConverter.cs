@@ -5,11 +5,11 @@ namespace TelegramBotForGitHub.Converters
 {
     public class TelegramEnumConverter : StringEnumConverter
     {
-        public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+        public override object? ReadJson(JsonReader reader, Type objectType, object? existingValue, JsonSerializer serializer)
         {
-            if (reader.TokenType == JsonToken.String)
+            if (reader.TokenType == JsonToken.String && reader.Value != null)
             {
-                string enumText = reader.Value.ToString();
+                string enumText = reader.Value.ToString() ?? string.Empty;
                 
                 if (objectType.Namespace?.StartsWith("Telegram.Bot") == true)
                 {
@@ -31,19 +31,19 @@ namespace TelegramBotForGitHub.Converters
             return base.ReadJson(reader, objectType, existingValue, serializer);
         }
         
-        private string ConvertSnakeCaseToPascalCase(string snakeCase)
+        private static string ConvertSnakeCaseToPascalCase(string snakeCase)
         {
             if (string.IsNullOrEmpty(snakeCase))
-                return snakeCase;
+                return snakeCase ?? string.Empty;
                 
             var parts = snakeCase.Split('_');
-            var result = "";
+            var result = string.Empty;
             
             foreach (var part in parts)
             {
                 if (!string.IsNullOrEmpty(part))
                 {
-                    result += char.ToUpper(part[0]) + part.Substring(1).ToLower();
+                    result += char.ToUpper(part[0]) + part[1..].ToLower();
                 }
             }
             

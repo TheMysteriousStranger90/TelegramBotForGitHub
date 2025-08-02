@@ -51,9 +51,9 @@ public class SubscribeCommand : TextBasedCommand
             return;
         }
 
-        var repository = parts[1];
+        var repository = parts?[1];
 
-        if (!repository.Contains('/') || repository.Count(c => c == '/') != 1)
+        if (repository != null && (!repository.Contains('/') || repository.Count(c => c == '/') != 1))
         {
             await _telegramClient.SendMessage(
                 chatId: message.Chat.Id,
@@ -65,7 +65,7 @@ public class SubscribeCommand : TextBasedCommand
         }
 
         var events = new List<string> { "push", "pull_request", "issues" };
-        if (parts.Length > 2)
+        if (parts != null && parts.Length > 2)
         {
             events = parts[2].Split(',', StringSplitOptions.RemoveEmptyEntries)
                 .Select(e => e.Trim().ToLower())
@@ -147,15 +147,7 @@ public class SubscribeCommand : TextBasedCommand
                 if (!string.IsNullOrEmpty(webhookUrl))
                 {
                     responseMessage +=
-                        $"💡 **Tip:** Configure GitHub webhook to `{webhookUrl}` to receive real-time notifications.\n\n" +
-                        $"**Webhook setup:**\n" +
-                        $"1. Go to your repository Settings\n" +
-                        $"2. Click on \"Webhooks\" in the left sidebar\n" +
-                        $"3. Click \"Add webhook\"\n" +
-                        $"4. Set Payload URL to: `{webhookUrl}`\n" +
-                        $"5. Set Content type to: `application/json`\n" +
-                        $"6. Set Secret to your webhook secret\n" +
-                        $"7. Select events: {string.Join(", ", events)}";
+                        $"💡 **Tip:** Configure GitHub webhook to `{webhookUrl}` to receive real-time notifications.\n\n";
                 }
 
                 await _telegramClient.SendMessage(

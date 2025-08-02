@@ -11,7 +11,7 @@ public class GitHubAuthState
     public long UserId { get; set; }
         
     [JsonProperty("state")]
-    public string State { get; set; }
+    public string State { get; set; } = string.Empty;
         
     [JsonProperty("createdAt")]
     public DateTime CreatedAt { get; set; }

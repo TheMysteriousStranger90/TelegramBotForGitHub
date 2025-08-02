@@ -23,12 +23,6 @@ namespace TelegramBotForGitHub.Commands.Core
 
             var canExecute = startsWithCommand || (message.Chat.Type != ChatType.Private && startsWithGroupCommand);
             
-            // Log for debugging
-            if (Pattern == "auth")
-            {
-                Console.WriteLine($"TextBasedCommand Debug - Pattern: {Pattern}, MessageText: {messageText}, CanExecute: {canExecute}");
-            }
-
             return canExecute;
         }
 

@@ -11,13 +11,13 @@ public class GitHubOAuthToken
     public long UserId { get; set; }
         
     [JsonProperty("accessToken")]
-    public string AccessToken { get; set; }
+    public string AccessToken { get; set; } = string.Empty;
         
     [JsonProperty("tokenType")]
     public string TokenType { get; set; } = "bearer";
         
     [JsonProperty("scope")]
-    public string Scope { get; set; }
+    public string Scope { get; set; } = string.Empty;
         
     [JsonProperty("createdAt")]
     public DateTime CreatedAt { get; set; }

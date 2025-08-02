@@ -29,9 +29,9 @@ namespace TelegramBotForGitHub.Commands.GitHubCommands
         public override async Task Execute(Message message)
         {
             var chatId = message.Chat.Id;
-            var parts  = message.Text.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+            var parts  = message.Text?.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
 
-            if (parts.Length != 2 || string.IsNullOrWhiteSpace(parts[1]))
+            if (parts != null && (parts.Length != 2 || string.IsNullOrWhiteSpace(parts[1])))
             {
                 await _telegramClient.SendMessage(chatId,
                     "Usage: `/userrepos <github-username>`\n\n" +
@@ -40,7 +40,7 @@ namespace TelegramBotForGitHub.Commands.GitHubCommands
                 return;
             }
 
-            var username = parts[1].Trim();
+            var username = parts?[1].Trim();
 
             _httpClient.DefaultRequestHeaders.Clear();
             _httpClient.DefaultRequestHeaders.Add("User-Agent", "TelegramBotForGitHub");

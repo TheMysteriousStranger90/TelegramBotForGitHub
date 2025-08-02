@@ -47,7 +47,7 @@ namespace TelegramBotForGitHub.Commands.GitHubCommands
             _logger.LogInformation("UnhandledCommand: Executing for message '{Text}'", message.Text);
             
             var displayString = $"❓ **Unknown command**\n\n" +
-                                $"I don't recognize the command `{message.Text.Split(' ')[0]}`.\n\n" +
+                                $"I don't recognize the command `{message.Text?.Split(' ')[0]}`.\n\n" +
                                 $"**Available commands:**\n" +
                                 $"• `/help` - Show all available commands\n" +
                                 $"• `/start` - Show welcome message\n" +
