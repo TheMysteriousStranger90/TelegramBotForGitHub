@@ -93,7 +93,6 @@ public class ProfileCommand : TextBasedCommand
         sb.AppendLine($"**Public Repos:** {userInfo.PublicRepos}");
         sb.AppendLine($"**Followers:** {userInfo.Followers}");
         sb.AppendLine($"**Following:** {userInfo.Following}");
-        sb.AppendLine($"**Joined:** {userInfo.CreatedAt:yyyy-MM-dd}");
         
         sb.AppendLine();
         sb.AppendLine($"🔗 [View on GitHub]({userInfo.HtmlUrl})");
