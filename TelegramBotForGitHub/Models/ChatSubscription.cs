@@ -11,7 +11,7 @@ public class ChatSubscription
     public long ChatId { get; set; }
         
     [JsonProperty("repositoryUrl")]
-    public string RepositoryUrl { get; set; }
+    public string RepositoryUrl { get; set; } = string.Empty;
         
     [JsonProperty("events")]
     public List<string> Events { get; set; } = new List<string>();

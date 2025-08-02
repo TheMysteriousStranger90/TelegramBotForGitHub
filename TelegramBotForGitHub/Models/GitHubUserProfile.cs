@@ -8,19 +8,19 @@ public class GitHubUserProfile
     public long Id { get; set; }
         
     [JsonProperty("login")]
-    public string Login { get; set; }
+    public string Login { get; set; } = string.Empty;
         
     [JsonProperty("name")]
-    public string Name { get; set; }
+    public string? Name { get; set; }
         
     [JsonProperty("email")]
-    public string Email { get; set; }
+    public string? Email { get; set; }
         
     [JsonProperty("avatar_url")]
-    public string AvatarUrl { get; set; }
+    public string AvatarUrl { get; set; } = string.Empty;
         
     [JsonProperty("bio")]
-    public string Bio { get; set; }
+    public string? Bio { get; set; }
         
     [JsonProperty("public_repos")]
     public int PublicRepos { get; set; }
@@ -32,7 +32,7 @@ public class GitHubUserProfile
     public int Following { get; set; }
         
     [JsonProperty("html_url")]
-    public string HtmlUrl { get; set; }
+    public string HtmlUrl { get; set; } = string.Empty;
         
     [JsonProperty("created_at")]
     public DateTime CreatedAt { get; set; }

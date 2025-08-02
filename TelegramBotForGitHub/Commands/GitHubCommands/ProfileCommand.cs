@@ -66,7 +66,7 @@ public class ProfileCommand : TextBasedCommand
                 parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
                 cancellationToken: CancellationToken.None);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             await _telegramClient.SendMessage(
                 chatId: message.Chat.Id,

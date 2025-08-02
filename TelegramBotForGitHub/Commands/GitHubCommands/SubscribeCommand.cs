@@ -147,15 +147,7 @@ public class SubscribeCommand : TextBasedCommand
                 if (!string.IsNullOrEmpty(webhookUrl))
                 {
                     responseMessage +=
-                        $"💡 **Tip:** Configure GitHub webhook to `{webhookUrl}` to receive real-time notifications.\n\n" +
-                        $"**Webhook setup:**\n" +
-                        $"1. Go to your repository Settings\n" +
-                        $"2. Click on \"Webhooks\" in the left sidebar\n" +
-                        $"3. Click \"Add webhook\"\n" +
-                        $"4. Set Payload URL to: `{webhookUrl}`\n" +
-                        $"5. Set Content type to: `application/json`\n" +
-                        $"6. Set Secret to your webhook secret\n" +
-                        $"7. Select events: {string.Join(", ", events)}";
+                        $"💡 **Tip:** Configure GitHub webhook to `{webhookUrl}` to receive real-time notifications.\n\n";
                 }
 
                 await _telegramClient.SendMessage(
