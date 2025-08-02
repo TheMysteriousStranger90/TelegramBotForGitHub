@@ -28,7 +28,7 @@ namespace TelegramBotForGitHub.Services
         
         #region GitHub OAuth Methods
 
-        public async Task<GitHubOAuthToken> GetGitHubTokenAsync(long userId)
+        public async Task<GitHubOAuthToken?> GetGitHubTokenAsync(long userId)
         {
             try
             {
@@ -126,7 +126,7 @@ namespace TelegramBotForGitHub.Services
             }
         }
 
-        public async Task<GitHubAuthState> GetAuthStateAsync(string state)
+        public async Task<GitHubAuthState?> GetAuthStateAsync(string state)
         {
             try
             {
@@ -184,7 +184,7 @@ namespace TelegramBotForGitHub.Services
             return await GetSubscriptionsForRepositoryAsync(repositoryUrl);
         }
 
-        public async Task<ChatSubscription> GetSubscriptionAsync(long chatId, string repositoryUrl)
+        public async Task<ChatSubscription?> GetSubscriptionAsync(long chatId, string repositoryUrl)
         {
             try
             {
